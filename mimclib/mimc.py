@@ -541,10 +541,6 @@ class MIMCRun(object):
             elif self.params.bias_calc == 'abs-bnd':
                 self.fn.EstimateBias = lambda r=self: estimate_bias_abs_bnd(r)
 
-        if self.params.lsq_est and not hasattr(self.fn, "WorkModel"):
-            raise NotImplementedError("Bayesian parameter fitting is only \
-supported with a given work model")
-
         if self.fn.SampleAll is None:
             raise ValueError("Must set the sampling functions fnSampleAll")
 
@@ -835,8 +831,6 @@ max_lvl        = {}
             raise NotImplemented("TODO, estimate w and s")
 
     def _estimateOptimalL(self, TOL):
-        assert self.params.lsq_est, "MIMC should be Bayesian to \
-estimate optimal number of levels"
         minL = self.last_itr.lvls_count
         minWork = np.inf
         LsRange = range(self.last_itr.lvls_count,
@@ -1052,7 +1046,8 @@ estimate optimal number of levels"
                 # user would like to discard samples when the first level changes
                 # Right now this is done in level extension.
                 # Added levels if bayesian
-                if self.params.lsq_est and self.last_itr.lvls_count > 0:
+                if self.params.lsq_est and hasattr(self.fn, "WorkModel") \
+                   and self.last_itr.lvls_count > 0:
                     # TODO: Do we really need this?
                     L = self._estimateOptimalL(TOL)
                     if L > self.last_itr.lvls_count:
