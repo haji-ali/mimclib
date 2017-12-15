@@ -53,7 +53,7 @@ def CreateDBConnection(mimcRun):
 
 def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
                        fnAddExtraArgs=None, fnInit=None, fnItrDone=None,
-                       fnSeed=np.random.seed, profCalc=None):
+                       fnSeed=np.random.seed):
     warnings.formatwarning = lambda msg, cat, filename, lineno, line: \
                              "{}:{}: ({}) {}\n".format(os.path.basename(filename),
                                                        lineno, cat.__name__, msg)
@@ -119,32 +119,34 @@ def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
     mimcRun.setFunctions(fnItrDone=fnItrDone)
     return mimcRun
 
+def RunTest(mimcRun):
+    tStart = time.clock()
+    try:
+        mimcRun.doRun()
+    except:
+        if mimcRun.params.db:
+            db = CreateDBConnection(mimcRun)
+            db.markRunFailed(mimcRun.db_data.run_id, total_time=time.clock()-tStart)
+        raise   # If you don't want to raise, make sure the following code is not executed
+
+    if mimcRun.params.db:
+        db = CreateDBConnection(mimcRun)
+        db.markRunSuccessful(mimcRun.db_data.run_id, total_time=time.clock()-tStart)
+    return mimcRun
+
 
 def RunStandardTest(fnSampleLvl=None,
                     fnSampleAll=None,
                     fnAddExtraArgs=None,
                     fnInit=None,
                     fnItrDone=None,
-                    fnSeed=np.random.seed, profCalc=None):
-    tStart = time.clock()
+                    fnSeed=np.random.seed):
     mimcRun = CreateStandardTest(fnSampleLvl=fnSampleLvl,
                                  fnSampleAll=fnSampleAll,
                                  fnAddExtraArgs=fnAddExtraArgs,
                                  fnInit=fnInit, fnItrDone=fnItrDone,
-                                 fnSeed=fnSeed, profCalc=profCalc)
-
-    db = CreateDBConnection(mimcRun)
-    try:
-        mimcRun.doRun()
-    except:
-        if mimcRun.params.db:
-            db.markRunFailed(mimcRun.db_data.run_id, total_time=time.clock()-tStart)
-        raise   # If you don't want to raise, make sure the following code is not executed
-
-    if mimcRun.params.db:
-        db.markRunSuccessful(mimcRun.db_data.run_id, total_time=time.clock()-tStart)
-    return mimcRun
-
+                                 fnSeed=fnSeed)
+    return RunTest(mimcRun)
 
 def run_errors_est_program(fnExactErr=None):
     from . import db as mimcdb

@@ -42,12 +42,12 @@ class Timer():
         print(msg.format(self.toc(pop=pop)))
 
 
-def _calcTheoryM(TOL, theta, Vl, Wl,
-                 active_lvls, ceil=True, minM=1,
-                 Ca=2):
+def _calcTheoryM(TOL, theta, Vl, Wl, active_lvls, ceil=True, minM=1,
+                 Ca=2, use_rmse=False):
     act = active_lvls >= 0
+    p = 0.5 if use_rmse else 1
     with np.errstate(divide='ignore', invalid='ignore'):
-        M = (theta * TOL / Ca)**-2 *\
+        M = (theta**p * TOL / Ca)**-2 *\
             np.sum(np.sqrt(Wl[act] * Vl[act])) * np.sqrt(Vl / Wl)
         M = np.maximum(M, minM)
         M[np.isnan(M)] = minM
@@ -333,7 +333,10 @@ class MIMCItrData(object):
 
     @property
     def total_error_est(self):
-        return self.bias + (self.stat_error if not np.isnan(self.stat_error) else 0)
+        stat_err = self.stat_error if not np.isnan(self.stat_error) else 0
+        if self.parent.use_rmse:
+            return np.sqrt(self.bias**2 + stat_err**2)
+        return self.bias + stat_err
 
     def zero_samples(self, ind=None):
         if ind is None:
@@ -460,12 +463,9 @@ class MIMCRun(object):
         if len(dims) > 0 and np.any(dims != dims[0]):
             raise ValueError("Size of beta, w, s and gamma must be of size dim")
 
-        # if self.params.bayesian:
-        #     self.Q = Bunch(S=np.inf, W=np.inf,
-        #                    w=self.params.w, s=self.params.s,
-        #                    theta=np.nan)
-        # else:
-        #     self.Q = Bunch(theta=np.nan)
+    def reset(self):
+        self.cur_start_level = 0
+        self.iters = []
 
     def _get_dim(self):
         dims = np.array([len(getattr(self.params, a))
@@ -512,7 +512,13 @@ class MIMCRun(object):
 
     @property
     def _Ca(self):
-        return norm.ppf((1+self.params.confidence)/2)
+        if self.params.confidence > 0:
+            return norm.ppf((1+self.params.confidence)/2)
+        return 1.
+
+    @property
+    def use_rmse(self):
+        return self.params.confidence <= 0
 
     def calcEg(self):
         return self.last_itr.calcEg()
@@ -713,17 +719,22 @@ Not needed if fnHierarchy is provided.")
     def output(self, verbose):
         output = ''
         if verbose >= VERBOSE_INFO:
+            p = 2 if self.use_rmse else 1
             output += '''Eg             = {}
-Bias           = {:.4e} | {:.4e}
-Stat. err      = {:.4e} | {:.4e}
+Bias{}         = {:.4e} | {:.4e}
+Stat. err{}    = {:.4e} | {:.4e}
 Error est.     = {:.4e} | {:.4e}
 Iteration Work = {:.4e}
 Iteration Time = {:.4e}
 TotalTime      = {:.4e}
 max_lvl        = {}
 '''.format(str(self.last_itr.calcEg()),
-           self.bias, (1-self.params.theta) * self.last_itr.TOL,
-           self.stat_error, self.params.theta * self.last_itr.TOL,
+           "^2" if self.use_rmse else "  ",
+           self.bias**p,
+           (1-self.params.theta) * self.last_itr.TOL**p,
+           "^2" if self.use_rmse else "  ",
+           self.stat_error**p,
+           self.params.theta * self.last_itr.TOL**p,
            self.total_error_est, self.last_itr.TOL,
            self.last_itr.calcTotalWork(),
            self.last_itr.calcTotalTime(),
@@ -748,6 +759,8 @@ max_lvl        = {}
         V = self.Vl_estimate[self.last_itr.lvls_find([])]
         if np.isnan(V):
             return np.nan
+        if self.use_rmse:
+            theta = np.sqrt(theta)
         return np.maximum(np.reshape(self.params.M0, (1,))[-1],
                           int(np.ceil((theta * TOL / self._Ca)**-2 * V)))
 
@@ -841,12 +854,10 @@ max_lvl        = {}
                 continue
             lvls = setutil.VarSizeList(np.arange(0, L+1).reshape((-1, 1)), min_dim=1)
             Wl = self.fn.WorkModel(lvls=lvls)
-            M = _calcTheoryM(TOL, theta=self._calcTheta(TOL,
-                                                        bias_est),
-                             Vl=self._estimateBayesianVl(L),
-                             Wl=Wl,
+            M = _calcTheoryM(TOL, theta=self._calcTheta(TOL,bias_est),
+                             Vl=self._estimateBayesianVl(L), Wl=Wl,
                              active_lvls=self.last_itr.active_lvls,
-                             Ca=self._Ca)
+                             Ca=self._Ca, use_rmse=self.use_rmse)
             totalWork = np.sum(Wl*M)
             if totalWork < minWork:
                 minL = L
@@ -925,7 +936,8 @@ max_lvl        = {}
 
     def _calcTheta(self, TOL, bias_est):
         if not self.params.const_theta:
-            return np.maximum((1 - bias_est/TOL) if TOL > 0 else
+            p = 2. if self.use_rmse else 1.
+            return np.maximum((1 - bias_est**p/TOL**p) if TOL > 0 else
                               np.inf, self.params.theta)
         return self.params.theta
 
@@ -1076,7 +1088,8 @@ max_lvl        = {}
                                      self.Vl_estimate,
                                      self.last_itr.calcWl(),
                                      self.last_itr.active_lvls,
-                                     Ca=self._Ca)
+                                     Ca=self._Ca,
+                                     use_rmse=self.use_rmse)
                 self.print_debug("theta", self.Q.theta)
                 self.print_debug("Wl: ", self.Wl_estimate)
                 self.print_debug("Vl: ", self.Vl_estimate)
@@ -1260,7 +1273,8 @@ def extend_prof_lvls(run, profCalc, min_lvls):
     # TODO: Do we need to add more levels that are beyond the minimum
     # number of levels
     # Only add levels if bias is not satisfied
-    if run.bias < (1-run.params.theta) * run.last_itr.TOL:
+    p = 2. if run.use_rmse else 1.
+    if run.bias**p < (1-run.params.theta) * run.last_itr.TOL**p:
         return
     added = 0
     lvls = run.last_itr.get_lvls()
