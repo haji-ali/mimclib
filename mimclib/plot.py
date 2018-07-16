@@ -1008,7 +1008,6 @@ def plotWorkContribVsLvls(ax, runs, *args, **kwargs):
 
     plotObj.append(plot(ax, x[sorted_ind[:-1]],
                         y, *args, **kwargs))
-    plotObj.append(ax.axhline(y=1., ls='--'))
     return plotObj[0][0].get_xydata(), plotObj
 
 
@@ -1123,9 +1122,10 @@ def plotTimeVsTOL(ax, runs, *args, **kwargs):
     fnTime = kwargs.pop("fnTime", 'time')
     MC_kwargs = kwargs.pop("MC_kwargs", None)
     min_samples = kwargs.pop("min_samples", None)
-    scale_tol2 = kwargs.pop('scale_tol2', True)
+    scale_y_tol2 = kwargs.pop('scale_y_tol2', True)
+    scale_x = kwargs.pop('scale_x', 1.)
 
-    if scale_tol2:
+    if scale_y_tol2:
         tol2_scale = lambda TOL: TOL**2
         tol2_label = r" $\times \tol^2$"
     else:
@@ -1177,11 +1177,7 @@ def plotTimeVsTOL(ax, runs, *args, **kwargs):
         else:
             scalar = lambda itr: np.ceil(new_samples(itr)) / itr.M
 
-    if scale_tol2:
-        tol2_scale = lambda TOL: TOL**2
-    else:
-        tol2_scale = lambda TOL: 1.
-    xy = [[itr.TOL, fnTime(r, itr) * tol2_scale(itr.TOL),
+    xy = [[itr.TOL*scale_x, fnTime(r, itr) * tol2_scale(itr.TOL),
            fnMCWork(r, itr) * r.estimateMonteCarloSampleCount(itr.TOL)
            * tol2_scale(itr.TOL)]
           for i, r, itr in enum_iter_i(runs, filteritr)]
@@ -1453,7 +1449,7 @@ def add_legend(ax, handles=None, labels=None, alpha=0.5, outside=None,
 
 
 def __formatMIMCRate(rate, log_rate, lbl_base=r"\tol",
-                     scale_tol2=True, lbl_log_base=None):
+                     scale_y_tol2=True, lbl_log_base=None):
     txt_rate = '{:.2g}'.format(rate)
     txt_log_rate = '{:.2g}'.format(log_rate)
     lbl_log_base = lbl_log_base or "{}^{{-1}}".format(lbl_base)
@@ -1463,9 +1459,9 @@ def __formatMIMCRate(rate, log_rate, lbl_base=r"\tol",
     if txt_log_rate != "0":
         label += r'\log\left({}\right)^{{ {} }}'.format(lbl_log_base,
                                                         txt_log_rate)
-    if scale_tol2:
+    if scale_y_tol2:
         rate += 2
-    return (lambda x, r=rate, lr=log_rate: x**r * np.abs(np.log(x))**lr), \
+    return (lambda x, r=rate, lr=log_rate: (x)**r * np.abs(np.log(x))**lr), \
         "${}$".format(label)
 
 
