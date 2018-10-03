@@ -401,7 +401,7 @@ def filteritr_all(run, iter_idx):
 @public
 def enum_iter(runs, fnFilter=filteritr_all):
     for r in runs:
-        for i in xrange(0, len(r.iters)):
+        for i in range(0, len(r.iters)):
             if fnFilter(r, i):
                 yield r, r.iters[i]
 
@@ -409,7 +409,7 @@ def enum_iter(runs, fnFilter=filteritr_all):
 @public
 def enum_iter_i(runs, fnFilter=filteritr_all):
     for r in runs:
-        for i in xrange(0, len(r.iters)):
+        for i in range(0, len(r.iters)):
             if fnFilter(r, i):
                 yield i, r, r.iters[i]
 
@@ -420,13 +420,13 @@ def computeIterationStats(runs, fnItrStats, arr_fnAgg, work_bins=50,
     xy = []
     for r in runs:
         prev = 0
-        for i in xrange(0, len(r.iters)):
+        for i in range(0, len(r.iters)):
             if not filteritr(r, i):
                 continue
             stats = fnItrStats(r, i)
             assert(len(stats) == len(arr_fnAgg))
             stats = [stats[i] if stats[i] is not None or len(xy)==0
-                     else xy[-1][i] for i in xrange(len(stats))]
+                     else xy[-1][i] for i in range(len(stats))]
             if not np.isfinite(stats[0]):
                 continue
             xy.append(stats)
@@ -633,12 +633,12 @@ def plotWorkVsLvlStats(ax, runs, *args, **kwargs):
         x_label = "Avg. tolerance"
     else:              raise ValueError('x_axis')
 
-    mymax = lambda A, n: [np.max(A[:, i]) for i in xrange(0, A.shape[1])] if len(A) > 0 else [None]*n
+    mymax = lambda A, n: [np.max(A[:, i]) for i in range(0, A.shape[1])] if len(A) > 0 else [None]*n
     def fnItrStats(run, i):
         itr = run.iters[i]
         try:
             prev = next(run.iters[j].lvls_count for j in
-                        xrange(i-1, 0, -1) if filteritr(r, j))
+                        range(i-1, 0, -1) if filteritr(r, j))
         except:
             prev = 0
 
@@ -1212,7 +1212,7 @@ def plotFirstLvlVsTOL(ax, runs, *args, **kwargs):
     filteritr = kwargs.pop("filteritr", filteritr_all)
     summary = []
     for r in runs:
-        for i in xrange(0, len(r.iters)):
+        for i in range(0, len(r.iters)):
             if not filteritr(r, i):
                 continue
             itr = r.iters[i]
@@ -1262,7 +1262,7 @@ def plotLvlsNumVsTOL(ax, runs, *args, **kwargs):
     for r in runs:
         prev = 0
         prevMax = 0
-        for i in xrange(0, len(r.iters)):
+        for i in range(0, len(r.iters)):
             if not filteritr(r, i):
                 continue
             itr = r.iters[i]

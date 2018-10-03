@@ -81,13 +81,13 @@ v(erbose): Verbose output of stack.
             # Copy old ipython locals
             new_local = dict()
             frm = self.shell.frames[self.shell.cur_frame]
-            for k, v in self.shell.user_ns.iteritems():
+            for k, v in self.shell.user_ns.items():
                 if k not in frm.f_locals:
                     new_local[k] = v
 
             self.shell.cur_frame = cur_frame
             frm = self.shell.frames[self.shell.cur_frame]
-            for k, v in frm.f_locals.iteritems():
+            for k, v in frm.f_locals.items():
                 new_local[k] = v
 
             self.shell.user_module = sys.modules[frm.f_globals['__name__']]
@@ -99,6 +99,7 @@ v(erbose): Verbose output of stack.
 
 class MyInteractiveShellEmbed(InteractiveShellEmbed):
     def __init__(self, **kwargs):
+        self._call_location_id = None
         self.tb_out = MyTB(color_scheme='Linux')
         # from IPython.core import ultratb as coreultratb
         # self.tb_verbose = coreultratb.VerboseTB(color_scheme='Linux')

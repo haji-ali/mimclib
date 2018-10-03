@@ -27,7 +27,7 @@ setup(
     packages=find_packages(),
     long_description=read('README.md'),
     install_requires=['matplotlib>=1.5', 'numpy>=1.9', 'scipy>=0.17.0', 'dill'],
-    extras_require={'mysqldb':  ["MySQL-python"]},
+    extras_require={'mysqldb':  ["mysqlclient"]},
     ext_modules=[
         Extension('mimclib.libset_util',
                   ['mimclib/libsetutil/src/set_util.cpp',

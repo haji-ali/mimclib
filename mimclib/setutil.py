@@ -293,7 +293,7 @@ class VarSizeList(object):
         dims = self.get_dim()
         active_dims = self.get_active_dim()
         min_dim = self.min_dim if min_dim is None else min_dim
-        for i in xrange(start, end):
+        for i in range(start, end):
             item = np.empty(np.maximum(min_dim, dims[i]), dtype=ind_t)
             data = np.empty(active_dims[i], dtype=ind_t)
             j    = np.empty(active_dims[i], dtype=ind_t)
@@ -306,7 +306,7 @@ class VarSizeList(object):
         if end is None:
             end = len(self)
         dims = self.get_active_dim()
-        for i in xrange(start, end):
+        for i in range(start, end):
             data = np.empty(dims[i], dtype=ind_t)
             j    = np.empty(dims[i], dtype=ind_t)
             __lib__.VarSizeList_get(self._handle, i, data, j, len(data))
@@ -336,8 +336,8 @@ class VarSizeList(object):
         # Partition data based on sizes
         s = np.hstack((np.array([0], dtype=np.int), np.cumsum(sizes, dtype=np.int)))
         ind = ij[1::2]
-        return [data[s[i]:s[i+1]] for i in xrange(0, len(s)-1)],\
-            [ind[s[i]:s[i+1]] for i in xrange(0, len(s)-1)]
+        return [data[s[i]:s[i+1]] for i in range(0, len(s)-1)],\
+            [ind[s[i]:s[i+1]] for i in range(0, len(s)-1)]
 
     def to_sparse_matrix(self, d_start=0, d_end=None):
         # Assumes that the martix is base 0

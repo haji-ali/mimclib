@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cmath>
 #include <vector>
+#include <random>
 #include "var_list.hpp"
 
 extern "C"{

@@ -3,9 +3,10 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
-import cPickle
+import pickle
 from . import setutil
 import sys
+import io
 
 import hashlib
 __all__ = []
@@ -17,19 +18,23 @@ def public(sym):
 def _md5(string):
     return hashlib.md5(string).hexdigest()
 
-def _pickle(obj, dump=cPickle.dump):
-    import io
+def _pickle(obj, dump=pickle.dump):
     import MySQLdb
     with io.BytesIO() as f:
-        dump(obj, f, protocol=2)
+        dump(obj, f, protocol=3)
         f.seek(0)
         return MySQLdb.Binary(f.read())
 
 
-def _unpickle(obj, load=cPickle.load):
-    import io
-    with io.BytesIO(obj) as f:
-        return load(f)
+def _unpickle(obj, load=pickle.load):
+    try:
+        with io.BytesIO(obj) as f:
+            return load(f)
+    except UnicodeDecodeError:
+        # This probably means that the data was saved using the
+        # old python2 pickle. Try a different encoding.
+        with io.BytesIO(obj) as f:
+            return load(f, encoding='latin1')
 
 def _nan2none(arr):
     return [None if not np.isfinite(x) else x for x in arr]
@@ -433,7 +438,7 @@ ORDER BY dr.run_id, dr.iteration_idx
                 if iter_id not in dictLvls:
                     continue
                 for l in dictLvls[iter_id]:
-                    t = np.array(map(int, [p for p in re.split(",|\|", l[1]) if p]),
+                    t = np.array(list(map(int, [p for p in re.split(",|\|", l[1]) if p])),
                                  dtype=setutil.ind_t)
                     k = iteration.lvls_find(ind=t[1::2], j=t[::2])
                     if k is None:

@@ -252,7 +252,7 @@ class MIMCItrData(object):
             return B
         w = self.weights**moment
         slicer = [slice(None)] + [None]*(len(B.shape)-1)
-        return B*w[slicer]
+        return B*w[tuple(slicer)]
 
     def calcFineCentralMoment(self, moment, weighted=True):
         if self.psums_delta is None:
@@ -262,7 +262,7 @@ class MIMCItrData(object):
             return B
         w = self.weights**moment
         slicer = [slice(None)] + [None]*(len(B.shape)-1)
-        return B*w[slicer]
+        return B*w[tuple(slicer)]
 
     def calcTl(self):
         idx = self.M != 0
@@ -374,7 +374,7 @@ class MIMCItrData(object):
 
     def lvls_find(self, ind, j=None):
         i = self._lvls.find(ind=ind, j=j)
-        return i if i < self.lvls_count else None
+        return i if i is not None and i < self.lvls_count else None
 
     def lvls_get(self, i):
         assert i < self.lvls_count
@@ -1423,7 +1423,7 @@ def estimate_bias_ml2r(run):
     slicer = [slice(None)] + [None]*(len(El.shape)-1)
     WL = calc_ml2r_weights(alpha, L)
     WL_1 = calc_ml2r_weights(alpha, L-1)
-    return np.abs(np.sum(WL_1[slicer] * El[:-1, ...]) - np.sum(WL[slicer]*El))
+    return np.abs(np.sum(WL_1[tuple(slicer)] * El[:-1, ...]) - np.sum(WL[tuple(slicer)]*El))
 
 
     # def update_ml2r_weights(self):
