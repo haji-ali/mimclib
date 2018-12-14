@@ -45,6 +45,42 @@ class MCMC():
         val = np.exp(-0.5*np.sum((y[::every] - self.data_y)**2) / self.args.data_noise)
         return val
 
+    def calcQoI_MC(self, L, stat_tol, Ca=2.,
+                   discard=1000, M=1000, ML=0):
+        assert(L <= self.args.data_lvl)
+
+        qoi = 0
+        qoi2 = 0
+        totalM = 0
+        sample_funcs = [self.mcmc_sample, self.mlmcmc_sample1,
+                        self.mlmcmc_sample2, self.mlmcmc_sample3]
+        ML = int(ML)
+
+        for m in xrange(0, discard):
+            sample_funcs[ML](L)
+
+        while True:
+            for m in xrange(0, M):
+                val = self.qoi(sample_funcs[ML](L))
+                qoi += val
+                qoi2 += val**2
+            totalM = m
+            stat_err = Ca * np.sqrt(((qoi2/totalM - qoi/totalM)**2)/totalM)
+            if stat_err < stat_tol:
+                print("""
+Value is:             {:.12f}
+Stat Error is:        {:.12f}
+Rejection percentage: [{}]
+Rejected:             [{}]
+Total:                [{}]""".format(qoi/totalM, stat_err,
+                      ','.join(map(lambda x: "{:.3}".format(x), 100*self.rejection_ratio())),
+                      ','.join(map(lambda x: "{:}".format(int(x)), self.rejected)),
+                      ','.join(map(lambda x: "{:}".format(int(x)), self.total_solves))))
+                return qoi/totalM
+            M *= 2
+            #print("Error is: {:.12f}, Computing an extra {} samples".format(stat_err, M))
+        return qoi/totalM
+
     def mcmc_sample(self, L):
         theta_p = np.random.multivariate_normal(self.theta,
                                                 self.args.proposal_var*np.eye(self.args.qoi_N))
@@ -52,93 +88,117 @@ class MCMC():
         # Symmetric kernel
         alpha = np.minimum(1, self.likelihood(theta_p, L) /
                            self.likelihood(self.theta, L))
-        U = np.random.random()
-        if U <= alpha:
-            self.theta = theta_p # Accept
+        # We don't need L+1, but this is to align the random
+        # number generator with MLMCMC
+        U = np.random.random(L+1)
+        if U[L] <= alpha:
+            self.theta = theta_p    # Accept
         else:
             # Reject
             self.rejected[L] += 1
+        self.n += 1
         return self.theta
 
-    def calcQoI_MC(self, L, stat_tol, Ca=2.,
-                   discard=1000, M=1000, ML=False):
-        assert(L <= self.args.data_lvl)
-
-        qoi = 0
-        qoi2 = 0
-        totalM = 0
-        sample_func = self.mlmcmc_sample2 if ML else self.mcmc_sample
-
-        for m in xrange(0, discard):
-            sample_func(L)
-
-        while True:
-            for m in xrange(0, M):
-                val = self.qoi(sample_func(L))
-                qoi += val
-                qoi2 += val**2
-            totalM = m
-            stat_err = Ca * np.sqrt(((qoi2/totalM - qoi/totalM)**2)/totalM)
-            if stat_err < stat_tol:
-                print("""Value is: {:.12f}
-Stat Error is: {:.12f}
-Rejection percentage: [{}]
-Total: [{}]""".format(qoi/totalM, stat_err,
-                      ','.join(map(lambda x: "{:.3}".format(x), 100*self.rejection_ratio())),
-                      ','.join(map(lambda x: "{:.3}".format(x), self.total_solves))))
-                return qoi/totalM
-            M *= 2
-            print("Error is: {:.12f}, Computing an extra {} samples".format(stat_err, M))
-        return qoi/totalM
-
-
-    def mlmcmc_sample(self, L):
+    def mlmcmc_sample1(self, L):
         theta_p = np.random.multivariate_normal(self.theta,
                                                 self.args.proposal_var*np.eye(self.args.qoi_N))
 
-        alpha = []
-        accept = True
+        prob = []
+        accept = None
+        U = np.random.random(L+1)
         for ell in xrange(0, L+1):
             # Symmetric kernel
             new = np.minimum(1, self.likelihood(theta_p, ell) /
                              self.likelihood(self.theta, ell))
-            alpha.append(new)
-            beta = alpha[-1] / alpha[-2] if len(alpha) > 1 else alpha[-1]
-
-            U = np.random.random()
-            if U > beta:
+            prob.append(new)
+            beta = (prob[-1] / prob[-2]) if len(prob) > 1 else prob[-1]
+            if U[ell] > beta:
                 # Reject
                 self.rejected[ell] += 1
                 accept = False
                 break
+            else:
+                accept = True
+
         # Accept
         if accept:
             self.theta = theta_p # Accept
+        self.n += 1
         return self.theta
 
     def mlmcmc_sample2(self, L):
         theta_p = np.random.multivariate_normal(self.theta,
                                                 self.args.proposal_var*np.eye(self.args.qoi_N))
 
-        alpha = []
-        accept = False
+        prob = []
+        accept = None
+        # This is not needed, but it's to align the random number generator with MLMCMC
+        U = 1-np.random.random(L+1)
         for ell in xrange(0, L+1):
             # Symmetric kernel
             new = np.minimum(1, self.likelihood(theta_p, ell) /
                              self.likelihood(self.theta, ell))
-            alpha.append(new)
-            beta = (1-alpha[-1]) / (1-alpha[-2]) if len(alpha) > 1 else alpha[-1]
-
-            U = np.random.random()
-            if U <= beta:
+            prob.append(1-new)
+            beta = (prob[-1] / prob[-2]) if len(prob) > 1 else prob[-1]
+            if U[ell] > beta:
                 # Accept
                 accept = True
                 break
             else:
+                accept = False
                 self.rejected[ell] += 1
         # Accept
         if accept:
             self.theta = theta_p # Accept
+        self.n += 1
+        return self.theta
+
+
+    def mlmcmc_sample3(self, L):
+        theta_p = np.random.multivariate_normal(self.theta,
+                                                self.args.proposal_var*np.eye(self.args.qoi_N))
+
+        prob = []
+        accept = False
+        U = np.random.random(L+1)
+        for ell in xrange(0, L+1):
+            # Symmetric kernel
+            new = np.minimum(1, self.likelihood(theta_p, ell) /
+                             self.likelihood(self.theta, ell))
+            mod = prob[-1] if len(prob) > 1 else 1
+            beta_1 = new / mod
+            beta_2 = (1-new) / mod
+            if beta_1 > 1:
+                beta_1 = new
+            if beta_2 > 1:
+                beta_2 = new
+            if beta_1 < beta_2:
+                prob.append(beta_1)
+                if U[ell] <= prob[-1]:
+                    # Accept, check next ell
+                    accept = True
+                    pass
+                else:
+                    # Reject, break
+                    accept = False
+                    self.rejected[ell] += 1
+                    break
+            else:
+                prob.append(beta_2)
+                U[ell] = 1-U[ell]   # NOT NEEDED. ALIGNMENT PURPOSES. SHOULD DELETE
+                if U[ell] <= prob[-1]:
+                    # Reject, check next ell
+                    accept = False
+                    self.rejected[ell] += 1
+                    pass
+                else:
+                    accept = True
+                    break
+
+        # Accept
+        if accept:
+            self.theta = theta_p # Accept
+        self.n += 1
         return self.theta
 
     def rejection_ratio(self):
@@ -154,6 +214,7 @@ Total: [{}]""".format(qoi/totalM, stat_err,
         self.rejected = np.zeros(1+self.args.data_lvl)
         self.total_solves = np.zeros(1+self.args.data_lvl)
         self.theta = np.zeros(self.args.qoi_N)
+        self.n = 0
 
 
 def addExtraArguments(parser):
@@ -170,12 +231,13 @@ def addExtraArguments(parser):
     parser.add_argument("-qoi_N", type=int, default=10, action="store")
     parser.add_argument("-h0inv", type=int, default=2, action="store")
     parser.add_argument("-beta", type=int, default=2, action="store")
+    parser.add_argument("-qoi_seed", type=int, default=1, action="store")
 
-
-    parser.add_argument("-data_noise", type=float, default=1e-1, action="store")
+    parser.add_argument("-data_seed", type=int, default=0, action="store")
+    parser.add_argument("-data_noise", type=float, default=0.2, action="store")
     parser.add_argument("-data_lvl", type=int, default=10, action="store")
     parser.add_argument("-data_size", type=int, default=16, action="store")
-    parser.add_argument("-proposal_var", type=float, default=0.01, action="store")
+    parser.add_argument("-proposal_var", type=float, default=1e-2, action="store")
     parser.add_argument("-L", type=int, default=0, action="store")
 
     # NOT USED, JUST FOR COMPATIBILITY
@@ -196,10 +258,15 @@ if __name__ == "__main__":
     args, unknowns = parser.parse_known_args()
 
     SField_Matern.Init()
-    np.random.seed(0)   # For data generation
+    np.random.seed(args.data_seed)   # For data generation
     mcmc = MCMC(args)
-    #np.random.seed()
-    #mcmc.calcQoI_MC(L=args.L, stat_tol=0.1, ML=False)
-    mcmc.reset()
-    mcmc.calcQoI_MC(L=args.L, stat_tol=0.1, ML=True)
+    import time
+    for ML in [3]:
+        mcmc.reset()
+        np.random.seed(args.qoi_seed)   # For data generation
+        print("Doing ML = {}".format(ML))
+        timeStart = time.time()
+        mcmc.calcQoI_MC(L=args.L, stat_tol=0.1, ML=ML)
+        print("Took: {:.2f} seconds".format(time.time()-timeStart))
+        print("-------------------------------------------------")
     SField_Matern.Final()
