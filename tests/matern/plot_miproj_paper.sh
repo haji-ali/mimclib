@@ -19,7 +19,7 @@ for N in 2 3 4 6
 do
     #echo $EST_CMD $DB_CONN -db_tag "sf-kink-2-$N%" "&& "
     echo python plot_miproj_paper.py $DB_CONN \
-         -db_tag ${BASETAG}2-$N-td-theory -o output/poisson-kink-$N-all \
+         -db_tag ${BASETAG}2-$N-td-theory -o output/poisson-kink-$N \
          -formats pdf tikz -abs_err \
-         -verbose # -qoi_exact_tag sf-kink-2-$N-adapt
+         -verbose -data_file output/poisson-kink-$N/data.dat # -qoi_exact_tag sf-kink-2-$N-adapt
 done

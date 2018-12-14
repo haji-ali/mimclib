@@ -150,6 +150,9 @@ def plot_all(runs, **kwargs):
     iters_count = np.sum([len(r.iters) for r in runs])
     verbose = kwargs.pop('verbose', False)
     legend_outside = kwargs.pop("legend_outside", 8)
+    PaperOnly = True   # If True, only produce the figures that are included in the paper
+
+
     if verbose:
         def print_msg(*args):
             print(*args)
@@ -162,166 +165,167 @@ def plot_all(runs, **kwargs):
     figures = []
     def add_fig(name):
         figures.append(plt.figure())
-        figures[-1].label = "fig:" + name
+        figures[-1].label = name
         figures[-1].file_name = name
         return figures[-1].gca()
 
     label_fmt = '{label}'
-    print_msg("plotWorkVsMaxError")
-    ax = add_fig('work-vs-max-error')
     Ref_kwargs = {'ls': '--', 'c':'k', 'label': label_fmt.format(label='{rate:.2g}')}
     ErrEst_kwargs = {'fmt': '--*','label': label_fmt.format(label='Error Estimate')}
     Ref_ErrEst_kwargs = {'ls': '-.', 'c':'k', 'label': label_fmt.format(label='{rate:.2g}')}
 
-    try:
-        miplot.plotWorkVsMaxError(ax, runs,
-                                  iter_stats_args=dict(work_spacing=np.log(np.sqrt(2)),
-                                                       filteritr=filteritr),
-                                  fnWork=lambda run, i:
-                                  run.iters[i].calcTotalWork(),
-                                  modifier=modifier, fmt='-*',
-                                  Ref_kwargs=Ref_kwargs)
-        ax.set_xlabel('Avg. Iteration Work')
-    except:
-        miplot.plot_failed(ax)
-        raise
-
-    print_msg("plotWorkVsMaxError")
-    ax = add_fig('time-vs-max-error')
-    try:
-        miplot.plotWorkVsMaxError(ax, runs,
-                                  iter_stats_args=dict(work_spacing=np.log(np.sqrt(2)),
-                                                       filteritr=filteritr),
-                                  fnWork=lambda run, i:
-                                  run.iters[i].calcTotalTime(),
-                                  modifier=modifier, fmt='-*',
-                                  Ref_kwargs=Ref_kwargs)
-        ax.set_xlabel('Avg. Iteration Time')
-    except:
-        miplot.plot_failed(ax)
-
-    print_msg("plotSeeds")
-    try:
-        ax = add_fig('error-vs-dim')
-        plotSeeds(ax, runs, '-o', fnNorm=fnNorm,
-                  label='Last iteration', Ref_kwargs=Ref_kwargs)
-        plotSeeds(ax, runs, '-o', fnNorm=fnNorm,
-                  Ref_kwargs=None,
-                  iter_idx=int(len(runs[0].iters)/4))
-    except:
-        miplot.plot_failed(ax)
-
-
-    print_msg("plotProfits")
-    ax = add_fig('profits')
-    plotProfits(ax, runs[0].last_itr)
-    ax.set_title('Err/Work')
-
-    ax = add_fig('profits')
-    plotProfits(ax, runs[0].last_itr, work_est='time')
-    ax.set_title('Err/Time')
-
-    print_msg("plotUserData")
-    ax = add_fig('cond-vs-iteration')
-    try:
-        plotUserData(ax, runs, '-o', which='cond')
-    except:
-        miplot.plot_failed(ax)
-
-    ax = add_fig('size-vs-iteration')
-    try:
-        plotUserData(ax, runs, '-o', which='size')
-    except:
-        miplot.plot_failed(ax)
-
-    print_msg("plotDirections")
-    ax = add_fig('error-vs-lvl')
-    #try:
-    miplot.plotDirections(ax, runs, miplot.plotExpectVsLvls,
-                          fnNorm=fnNorm,
-                          dir_kwargs=[{'x_axis':'ell'}, {'x_axis':'ell'}])
-    # except:
-    #     miplot.plot_failed(ax)
-    #     raise
-
-    print_msg("plotDirections")
-    ax = add_fig('work-vs-lvl')
-    try:
-        miplot.plotDirections(ax, runs, miplot.plotWorkVsLvls,
-                              fnNorm=fnNorm, dir_kwargs=[{'x_axis':'ell'}, {'x_axis':'ell'}])
-    except:
-        miplot.plot_failed(ax)
-        raise
-
-    print_msg("plotDirections")
-    ax = add_fig('time-vs-lvl')
-    try:
-        miplot.plotDirections(ax, runs, miplot.plotTimeVsLvls,
-                              fnNorm=fnNorm, dir_kwargs=[{'x_axis':'ell'}, {'x_axis':'ell'}])
-    except:
-        miplot.plot_failed(ax)
-        raise
-
-    if runs[0].params.min_dim > 0 and runs[0].last_itr.lvls_max_dim() > 2:
-        print("Max dim", runs[0].last_itr.lvls_max_dim())
-        run = runs[0]
-        from mimclib import setutil
-        if run.params.qoi_example == 'sf-matern':
-            profit_calc = setutil.MIProfCalculator([0.0] * run.params.min_dim,
-                                                   run.params.miproj_set_xi,
-                                                   run.params.miproj_set_sexp,
-                                                   run.params.miproj_set_mul)
-        else:
-            qoi_N = run.params.miproj_max_vars
-            miproj_set_dexp = run.params.miproj_set_dexp if run.params.min_dim > 0 else 0
-            td_w = [miproj_set_dexp] * run.params.min_dim + [0.] * qoi_N
-            hc_w = [0.] * run.params.min_dim +  [run.params.miproj_set_sexp] * qoi_N
-            profit_calc = setutil.TDHCProfCalculator(td_w, hc_w)
-
-        profits = run.last_itr._lvls.calc_log_prof(profit_calc)
-        reduced_run = runs[0].reduceDims(np.arange(0, runs[0].params.min_dim),
-                                         profits)    # Keep only the spatial dimensions
-        print_msg("plotDirections")
-        ax = add_fig('reduced-expect-vs-lvl')
-        try:
-            miplot.plotDirections(ax, [reduced_run],
-                                  miplot.plotExpectVsLvls, fnNorm=fnNorm,
-                                  dir_kwargs=[{'x_axis':'ell'}, {'x_axis':'ell'}])
-        except:
-            miplot.plot_failed(ax)
-        print_msg("plotDirections")
-        ax = add_fig('reduced-work-vs-lvl')
-        try:
-            miplot.plotDirections(ax, [reduced_run],
-                                  miplot.plotWorkVsLvls, fnNorm=fnNorm,
-                                  dir_kwargs=[{'x_axis':'ell'}, {'x_axis':'ell'}])
-        except:
-            miplot.plot_failed(ax)
-    print_msg("plotBestNTerm")
-    try:
-        ax = add_fig('best-nterm')
-        plotBestNTerm(ax, runs, '-o', Ref_kwargs=Ref_kwargs)
-    except:
-        miplot.plot_failed(ax)
-
-    print_msg("plotWorkVsLvlStats")
-    ax = add_fig('stats-vs-lvls')
-    try:
-        miplot.plotWorkVsLvlStats(ax, runs, '-ob',
-                                  filteritr=filteritr,
-                                  label=label_fmt.format(label='Total dim.'),
-                                  active_kwargs={'fmt': '-*g', 'label':
-                                                 label_fmt.format(label='Max active dim.')},
-                                  maxrefine_kwargs={'fmt': '-sr', 'label':
-                                                    label_fmt.format(label='Max refinement')})
-    except:
-        miplot.plot_failed(ax)
-
+    # This command will produce the paper plots
     figures.extend(plotSingleLevel(runs,
                                    kwargs['input_args'],
                                    modifier=modifier,
                                    fnNorm=fnNorm,
                                    Ref_kwargs=Ref_kwargs))
+
+    if not PaperOnly:
+        print_msg("plotWorkVsMaxError")
+        ax = add_fig('work-vs-max-error')
+        try:
+            miplot.plotWorkVsMaxError(ax, runs,
+                                      iter_stats_args=dict(work_spacing=np.log(np.sqrt(2)),
+                                                           filteritr=filteritr),
+                                      fnWork=lambda run, i:
+                                      run.iters[i].calcTotalWork(),
+                                      modifier=modifier, fmt='-*',
+                                      Ref_kwargs=Ref_kwargs)
+            ax.set_xlabel('Avg. Iteration Work')
+        except:
+            miplot.plot_failed(ax)
+            raise
+
+        print_msg("plotWorkVsMaxError")
+        ax = add_fig('time-vs-max-error')
+        try:
+            miplot.plotWorkVsMaxError(ax, runs,
+                                      iter_stats_args=dict(work_spacing=np.log(np.sqrt(2)),
+                                                           filteritr=filteritr),
+                                      fnWork=lambda run, i:
+                                      run.iters[i].calcTotalTime(),
+                                      modifier=modifier, fmt='-*',
+                                      Ref_kwargs=Ref_kwargs)
+            ax.set_xlabel('Avg. Iteration Time')
+        except:
+            miplot.plot_failed(ax)
+
+        print_msg("plotSeeds")
+        try:
+            ax = add_fig('error-vs-dim')
+            plotSeeds(ax, runs, '-o', fnNorm=fnNorm,
+                      label='Last iteration', Ref_kwargs=Ref_kwargs)
+            plotSeeds(ax, runs, '-o', fnNorm=fnNorm,
+                      Ref_kwargs=None,
+                      iter_idx=int(len(runs[0].iters)/4))
+        except:
+            miplot.plot_failed(ax)
+
+        print_msg("plotProfits")
+        ax = add_fig('profits')
+        plotProfits(ax, runs[0].last_itr)
+        ax.set_title('Err/Work')
+
+        ax = add_fig('profits')
+        plotProfits(ax, runs[0].last_itr, work_est='time')
+        ax.set_title('Err/Time')
+
+        print_msg("plotUserData")
+        ax = add_fig('cond-vs-iteration')
+        try:
+            plotUserData(ax, runs, '-o', which='cond')
+        except:
+            miplot.plot_failed(ax)
+
+        ax = add_fig('size-vs-iteration')
+        try:
+            plotUserData(ax, runs, '-o', which='size')
+        except:
+            miplot.plot_failed(ax)
+
+        print_msg("plotDirections")
+        ax = add_fig('error-vs-lvl')
+        #try:
+        miplot.plotDirections(ax, runs, miplot.plotExpectVsLvls,
+                              fnNorm=fnNorm,
+                              dir_kwargs=[{'x_axis':'ell'}, {'x_axis':'ell'}])
+        # except:
+        #     miplot.plot_failed(ax)
+        #     raise
+
+        print_msg("plotDirections")
+        ax = add_fig('work-vs-lvl')
+        try:
+            miplot.plotDirections(ax, runs, miplot.plotWorkVsLvls,
+                                  fnNorm=fnNorm, dir_kwargs=[{'x_axis':'ell'}, {'x_axis':'ell'}])
+        except:
+            miplot.plot_failed(ax)
+            raise
+
+        print_msg("plotDirections")
+        ax = add_fig('time-vs-lvl')
+        try:
+            miplot.plotDirections(ax, runs, miplot.plotTimeVsLvls,
+                                  fnNorm=fnNorm, dir_kwargs=[{'x_axis':'ell'}, {'x_axis':'ell'}])
+        except:
+            miplot.plot_failed(ax)
+            raise
+
+        if runs[0].params.min_dim > 0 and runs[0].last_itr.lvls_max_dim() > 2:
+            print("Max dim", runs[0].last_itr.lvls_max_dim())
+            run = runs[0]
+            from mimclib import setutil
+            if run.params.qoi_example == 'sf-matern':
+                profit_calc = setutil.MIProfCalculator([0.0] * run.params.min_dim,
+                                                       run.params.miproj_set_xi,
+                                                       run.params.miproj_set_sexp,
+                                                       run.params.miproj_set_mul)
+            else:
+                qoi_N = run.params.miproj_max_vars
+                miproj_set_dexp = run.params.miproj_set_dexp if run.params.min_dim > 0 else 0
+                td_w = [miproj_set_dexp] * run.params.min_dim + [0.] * qoi_N
+                hc_w = [0.] * run.params.min_dim +  [run.params.miproj_set_sexp] * qoi_N
+                profit_calc = setutil.TDHCProfCalculator(td_w, hc_w)
+
+            profits = run.last_itr._lvls.calc_log_prof(profit_calc)
+            reduced_run = runs[0].reduceDims(np.arange(0, runs[0].params.min_dim),
+                                             profits)    # Keep only the spatial dimensions
+            print_msg("plotDirections")
+            ax = add_fig('reduced-expect-vs-lvl')
+            try:
+                miplot.plotDirections(ax, [reduced_run],
+                                      miplot.plotExpectVsLvls, fnNorm=fnNorm,
+                                      dir_kwargs=[{'x_axis':'ell'}, {'x_axis':'ell'}])
+            except:
+                miplot.plot_failed(ax)
+            print_msg("plotDirections")
+            ax = add_fig('reduced-work-vs-lvl')
+            try:
+                miplot.plotDirections(ax, [reduced_run],
+                                      miplot.plotWorkVsLvls, fnNorm=fnNorm,
+                                      dir_kwargs=[{'x_axis':'ell'}, {'x_axis':'ell'}])
+            except:
+                miplot.plot_failed(ax)
+        print_msg("plotBestNTerm")
+        try:
+            ax = add_fig('best-nterm')
+            plotBestNTerm(ax, runs, '-o', Ref_kwargs=Ref_kwargs)
+        except:
+            miplot.plot_failed(ax)
+
+        print_msg("plotWorkVsLvlStats")
+        ax = add_fig('stats-vs-lvls')
+        try:
+            miplot.plotWorkVsLvlStats(ax, runs, '-ob',
+                                      filteritr=filteritr,
+                                      label=label_fmt.format(label='Total dim.'),
+                                      active_kwargs={'fmt': '-*g', 'label':
+                                                     label_fmt.format(label='Max active dim.')},
+                                      maxrefine_kwargs={'fmt': '-sr', 'label':
+                                                        label_fmt.format(label='Max refinement')})
+        except:
+            miplot.plot_failed(ax)
 
     for fig in figures:
         for ax in fig.axes:
@@ -338,12 +342,12 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
     # cmp_tags = [None, '-adapt', '-adapt-time',
     #             '-tdfit', '-full-adapt', '-td-theory']
 
-    # cmp_labels = ['SL', 'ML', 'Adaptive ML']
-    # cmp_tags = [None, '-tdfit', '-full-adapt']
+    cmp_labels = ['Single level', 'Multilevel', 'Adaptive Multilevel']
+    cmp_tags = [None, '-td-theory', '-adapt']
 
-    cmp_labels = ['SL', 'ML', 'Adaptive ML', 'Adaptive ML - Arcsine',
-                  'Adaptive ML - Discard']
-    cmp_tags = [None, '-td-theory', '-adapt', '-adapt-arcsine', '-adapt-discard']
+    # cmp_labels = ['SL', 'ML', 'Adaptive ML', 'Adaptive ML - Arcsine',
+    #               'Adaptive ML - Discard']
+    # cmp_tags = [None, '-td-theory', '-adapt', '-adapt-arcsine', '-adapt-discard']
 
     modifier = kwargs.pop('modifier', None)
     fnNorm = kwargs.pop('fnNorm', None)
@@ -364,7 +368,7 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
     axes = []
     def add_fig(name):
         figures.append(plt.figure())
-        figures[-1].label = "fig:" + name
+        figures[-1].label = name
         figures[-1].file_name = name
         axes.append(figures[-1].gca())
         return figures[-1].gca()

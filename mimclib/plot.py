@@ -8,7 +8,7 @@ from . import mimc
 from matplotlib.ticker import MaxNLocator
 import os
 try:
-    from matplotlib2tikz import save as tikz_save
+    from matplotlib2tikz import save as tikz_save, DataFile
 except:
     pass
 
@@ -109,6 +109,7 @@ class FunctionLine2D(plt.Line2D):
         if data is not None:
             self.set_data(data, log_data)
 
+        self.tikz_function = "TIKZCODE"   # HACK: This should be done somewhere else
         super(FunctionLine2D, self).__init__([], [], *args, **kwargs)
 
     def _linspace(self, lim, scale, N=100):
@@ -1783,6 +1784,8 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
                             choices=['convergent', 'all', 'last'])
         parser.add_argument("-abs_err", dest='relative',
                             action="store_false", default=True)
+        parser.add_argument("-data_file", dest='data_file', type=str,
+                            default=None)
         parser.add_argument("-done_flag", type=int, nargs='+', action="store")
         parser.add_argument("-qoi_exact_tag", type=str, action="store")
         parser.add_argument("-formats", type=str, action="store",
@@ -1869,12 +1872,17 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
             os.makedirs(dir_name)
         for i, fig in enumerate(figures):
             print("Saving", fig.label)
+            data_file = DataFile(r'\loadedtable') if hasattr(args, "data_file") else None
+
             tikz_save("{}/{}.tex".format(dir_name, fig.label), fig,
                       manual_legend=True,
                       show_info=False,
                       figurewidth=r'\figurewidth',
                       figureheight=r'\figureheight',
-                      figlabel=r'\figlabel')
+                      figlabel=r'\figlabel',
+                      data_file=data_file)
+            if data_file is not None:
+                data_file.write(args.data_file, transpose=True)
 
     if hasattr(args, "cmd"):
         os.system(args.cmd.format(args.o))
