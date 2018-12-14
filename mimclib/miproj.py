@@ -110,7 +110,7 @@ class TensorExpansion(object):
         values = np.ones((len(X), len(base_indices)))
         basis_values = np.empty(rdim, dtype=object)
 
-        for d in xrange(0, rdim):
+        for d in range(0, rdim):
             basis_values[d] = fnBasis(X[:, d], max_deg[d]+1)
 
         for i, mi in enumerate(base_indices):
@@ -172,9 +172,9 @@ class MIWProjSampler(object):
         def add_points(self, fnSample, alphas, X):
             self.X.extend(X.tolist())
             if self.Y is None:
-                self.Y = [np.zeros(0) for i in xrange(len(alphas))]
+                self.Y = [np.zeros(0) for i in range(len(alphas))]
             assert(len(self.Y) == len(alphas))
-            for i in xrange(0, len(alphas)):
+            for i in range(0, len(alphas)):
                 self.Y[i] = np.hstack((self.Y[i], fnSample(alphas[i], X)))
 
         def __len__(self):
@@ -205,7 +205,7 @@ class MIWProjSampler(object):
 
         from itertools import count
         from collections import defaultdict
-        self.alpha_dict = defaultdict(count(0).next)
+        self.alpha_dict = defaultdict(lambda c=count(0): next(c))
         self.lvls = None
 
         self.prev_samples = defaultdict(lambda: MIWProjSampler.SamplesCollection(self.min_dim))
@@ -215,7 +215,7 @@ class MIWProjSampler(object):
         self.user_data = []
 
     def init_mimc_run(self, run):
-        run.params.M0 = np.array([0])
+        run.params.M0 = np.array([1])
         run.params.reuse_samples = False
         run.params.lsq_est = False
         run.params.moments = 1
@@ -234,7 +234,7 @@ class MIWProjSampler(object):
 
     def estimateWork(self):
         total_work = 0
-        for alpha, ind in self.alpha_dict.iteritems():
+        for alpha, ind in self.alpha_dict.items():
             work_per_sample = self.fnWorkModel(setutil.VarSizeList([alpha]))[0]
             sel_lvls = np.nonzero(self.alpha_ind == ind)[0]
             beta_indset = self.lvls.sublist(sel_lvls, d_start=self.d, min_dim=0)
@@ -263,7 +263,7 @@ class MIWProjSampler(object):
         # Add previous times and works from previous iteration
         from .mimc import Bunch
         timer = mimc.Timer(clock=time.time)
-        for alpha, ind in self.alpha_dict.iteritems():
+        for alpha, ind in self.alpha_dict.items():
             timer.tic()
             sam_col = self.prev_samples[ind]
             sel_lvls = np.nonzero(self.alpha_ind == ind)[0]
@@ -308,7 +308,7 @@ class MIWProjSampler(object):
             todoN_per_beta = np.zeros(sam_col.beta_count)
             totalN_per_beta = np.zeros(sam_col.beta_count)
             totalBasis_per_beta = np.zeros(sam_col.beta_count)
-            for i in xrange(0, sam_col.beta_count):
+            for i in range(0, sam_col.beta_count):
                 todoN_per_beta[i] = np.sum(N_todo[sam_col.pols_to_beta == i])
                 totalN_per_beta[i] = np.sum(N_per_basis[sam_col.pols_to_beta == i])
                 totalBasis_per_beta[i] = np.sum(sam_col.pols_to_beta == i)
@@ -353,16 +353,16 @@ class MIWProjSampler(object):
             #     pass
 
             timer.tic()
-            for i in xrange(0, len(sub_alphas)):
+            for i in range(0, len(sub_alphas)):
                 # Add each element separately
                 R = np.dot(basis_values.transpose(), (sam_col.Y[i] * W))
                 if self.direct:
                     coeffs = solve(G, R, sym_pos=True)
                 else:
-                    coeffs, info = gmres(G, R, tol=1e-12)
+                    coeffs, info = gmres(G, R, tol=1e-12, atol='legacy')
                     assert(info == 0)
                 projections = np.empty(sam_col.beta_count, dtype=TensorExpansion)
-                for j in xrange(0, sam_col.beta_count):
+                for j in range(0, sam_col.beta_count):
                     # if len(beta_indset[j]) == 0:
                     #     sel_coeff = np.ones(len(coeffs), dtype=np.Boole)
                     # else:
@@ -429,9 +429,9 @@ class MIWProjSampler(object):
 #     X = np.zeros((N, max_dim))
 #     with np.errstate(divide='ignore', invalid='ignore'):
 #         pol = np.random.randint(0, len(bases_indices))
-#         # for pol in xrange(0, len(bases_indices)):
-#         #     for i in xrange(N_per_basis[pol]):
-#         for i in xrange(N):
+#         # for pol in range(0, len(bases_indices)):
+#         #     for i in range(N_per_basis[pol]):
+#         for i in range(N):
 #             base_pol = bases_indices.get_item(pol, max_dim)
 #             for dim in range(max_dim):
 #                 accept=False
@@ -449,10 +449,11 @@ class MIWProjSampler(object):
 
 @public
 def sample_arcsine_pts(N_per_basis, bases_indices, min_dim, interval=(-1, 1)):
-    N = int(np.sum(N_per_basis))
+    N_done = np.ceil(N_per_basis).astype(np.int)
+    N = np.sum(N_done)
     max_dim = int(np.maximum(min_dim, bases_indices.max_dim()))
     X_temp = (np.cos(np.pi * np.random.rand(N, max_dim)) + 1) / 2
-    return interval[0]+X_temp*(interval[1]-interval[0])
+    return interval[0]+X_temp*(interval[1]-interval[0]), N_done
 
 @public
 def arcsine_weights(X, interval=(-1, 1)):
@@ -466,16 +467,20 @@ def optimal_weights(basis_values):
     # TODO: Check sizes
     return basis_values.shape[1] / np.sum(basis_values**2, axis=1)
 
+
 @public
-def exp_basis_from_level(beta):
+def prod_basis_from_level(beta):
     # beta is zero indexed
-    max_deg = 2 ** (beta + 1) - 1
-    prev_deg = np.maximum(0, 2 ** beta - 1)
-    # max_deg = 2 ** beta
-    # prev_deg = np.maximum(0, 2 ** (np.array(beta, dtype=np.int)-1))
-    l = len(beta)
+    # max_deg = 2 ** beta + 1
+    # prev_deg = max_deg
+    # prev_deg = 2 ** np.maximum((beta-1), 0) + 1
+    # prev_deg[beta == 0] = 0
+    max_deg = 2 ** (beta+1)-1
+    prev_deg = 2 ** (beta)-1
+    # prev_deg = 2 ** np.maximum((beta-1), 0) + 1
+    # prev_deg[beta == 0] = 0
     return list(itertools.product(*[np.arange(prev_deg[i], max_deg[i])
-                                     for i in xrange(0, l)]))
+                                    for i in range(0, len(beta))]))
 
 @public
 def td_basis_from_level(d, beta):
@@ -484,11 +489,11 @@ def td_basis_from_level(d, beta):
     assert(len(beta) <= 1)
     b = 0 if len(beta) == 0 else beta[0]
     basis = setutil.VarSizeList()
-    basis.expand_set(td_prof, d, max_prof=2**b)
+    basis.expand_set(td_prof, d, max_prof=2**(b+1)-1)
     if b == 0:
         return basis
     profits = basis.calc_log_prof(td_prof)
-    return basis.sublist(profits > 2**(b-1))
+    return basis.sublist(np.logical_and(profits >= 2**b-1, profits < 2**(b+1)-1))
 
 
 @public
@@ -498,7 +503,7 @@ def pair_basis_from_level(beta):
     prev_deg = np.maximum(0, max_deg - 2)
     l = len(beta)
     return list(itertools.product(*[np.arange(prev_deg[i], max_deg[i])
-                                     for i in xrange(0, l)]))
+                                     for i in range(0, l)]))
 
 @public
 def default_samples_count(basis, C=2):

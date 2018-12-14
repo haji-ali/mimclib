@@ -2,15 +2,18 @@
 
 # make
 # rm -f data.sql
-VERBOSE="-db -mimc_verbose 1 "
 SEL_CMD="$1"
 EXAMPLE="$2"
 if [ -z "$EXAMPLE" ]; then
     EXAMPLE='sf-kink'
 fi
-#DB_CONN='-db_engine mysql -db_name mimc -db_host 129.67.187.118 '
-DB_CONN='-db_engine sqlite -db_name miproj.sqlite '
-BASETAG="$EXAMPLE-"
+DBHOST="129.67.187.118" # Ultra-magnus
+DBHOST="129.67.184.182" # mimic
+
+DB_CONN="-db_engine mysql -db_name mimc -db_host ${DBHOST} -mimc_verbose 0 "
+#DB_CONN='-db_engine sqlite -db_name miproj.sqlite -mimc_verbose 0 '
+#DB_CONN='-mimc_verbose 1 '
+BASETAG="postrev-$EXAMPLE-"
 COMMON="-qoi_seed 0 -ksp_rtol 1e-15 -ksp_type gmres  $DB_CONN "
 EST_CMD="python miproj_esterr.py $COMMON "
 RUN_CMD="OPENBLAS_NUM_THREADS=1 python miproj_run.py -qoi_example $EXAMPLE \
@@ -24,27 +27,26 @@ function run_cmd {
 }
 
 function plot_cmd {
-    echo ../plot_prog.py $DB_CONN \
+    echo python ../plot_prog.py $DB_CONN \
          -o output/self-$BASETAG$2-$4$1.pdf \
-         -verbose True -all_itr True -qoi_exact_tag $BASETAG$2-$4$1 \
+         -verbose -all_itr -qoi_exact_tag $BASETAG$2-$4$1 \
          -db_tag $BASETAG$2-$4$1
 }
 
 function plotest_cmd {
-    echo ../plot_prog.py "$DB_CONN" \
+    echo python ../plot_prog.py "$DB_CONN" \
          -o "output/$BASETAG$2-$4$1.pdf" \
-         -verbose True -all_itr True \
+         -verbose -all_itr \
          -db_tag "$BASETAG$2-$4$1"
 }
 
 
 function errest_cmd {
-    echo $EST_CMD -miproj_max_lvl "$3" \
-         -qoi_dim "$2" -qoi_df_nu "$4" \
-         "${@:5}" -db_tag "$BASETAG$2-$4$1" \
-         "; " ../plot_prog.py "$DB_CONN" \
-         -o "output/$BASETAG$2-$4$1.pdf" \
-         -verbose True -all_itr True -db_tag "$BASETAG$2-$4$1"
+    echo $EST_CMD -miproj_max_lvl "$3" -qoi_dim "$2" -qoi_df_nu "$4" \
+         "${@:5}" -db_tag "$BASETAG$2-$4$1 > output/txt/$BASETAG$2-$4$1.txt"  #\
+         # "; " ../plot_prog.py "$DB_CONN" \
+         # -o "output/$BASETAG$2-$4$1.pdf" \
+         # -verbose -all_itr -db_tag "$BASETAG$2-$4$1"
 }
 
 function all_cmds {
@@ -77,42 +79,51 @@ fi;
 
 if [ "$EXAMPLE" = "sf-kink" ]; then
     CMN='-qoi_sigma -1 -mimc_beta 1.4142135623730951 -qoi_scale 0.5 '
-    for N in 2 4 6
+    for N in 2 3 4 6
     do
         max_lvl=12
 	    ALPHA=3.
 	    THETA=`echo "$N/2" | bc -l`
 
         all_cmds "-td-theory" 2 $max_lvl $N -miproj_max_vars $N \
-                 -miproj_s_alpha $ALPHA -miproj_s_proj_sample_ratio 0. \
+                 -miproj_s_alpha $ALPHA \
                  -miproj_s_theta $THETA -miproj_d_beta 1. -miproj_d_gamma 1. \
-                 -miproj_set apriori -mimc_min_dim 1 $CMN  -miproj_double_work True
+                 -miproj_set apriori -mimc_min_dim 1 $CMN -miproj_double_work
 
         all_cmds "-adapt" 2 $max_lvl $N -miproj_max_vars $N \
-                 -miproj_s_proj_sample_ratio 0. -miproj_set_maxadd 1 \
+                 -miproj_set_maxadd 1 \
+                 -miproj_set adaptive -mimc_min_dim 1 $CMN
+
+        all_cmds "-adapt-arcsine" 2 $max_lvl $N -miproj_max_vars $N \
+                 -miproj_set_maxadd 1 \
+                 -miproj_pts_sampler arcsine \
+                 -miproj_set apriori-adapt -mimc_min_dim 1 $CMN
+
+        all_cmds "-adapt-discard" 2 $max_lvl $N -miproj_max_vars $N \
+                 -miproj_set_maxadd 1 \
+                 -miproj_discard_samples \
                  -miproj_set apriori-adapt -mimc_min_dim 1 $CMN
 
         # all_cmds "-adapt-time" 2 $max_lvl $N -miproj_max_vars $N \
         #          -miproj_s_proj_sample_ratio 0. -miproj_set_maxadd 1 \
-        #          -miproj_time True -miproj_set apriori-adapt -mimc_min_dim 1 $CMN
+        #          -miproj_time -miproj_set apriori-adapt -mimc_min_dim 1 $CMN
 
         # all_cmds "-noproj" 2 $max_lvl $N -miproj_max_vars $N \
         #          -miproj_s_alpha $ALPHA -miproj_s_proj_sample_ratio 0. \
-        #          -miproj_set apriori -mimc_min_dim 1 $CMN  -miproj_double_work True
+        #          -miproj_set apriori -mimc_min_dim 1 $CMN  -miproj_double_work
 
         # all_cmds -adapt 2 $max_lvl $N -miproj_max_vars $N -mimc_min_dim 1 \
         #          -miproj_set_maxadd 1 $CMN
 
-        # max_lvl=9
-        # for (( i=0; i<=$max_lvl; i++ ))
-        # do
-        #     # all_cmds -fix-adapt-$i 2 $(($i+2)) $N -mimc_min_dim 0 -miproj_max_vars $N \
-        #     #          -miproj_fix_lvl $i -miproj_set adaptive \
-        #     #          $CMN
+        max_lvl=9
+        for (( i=0; i<=$max_lvl; i++ ))
+        do
+            # all_cmds -fix-adapt-$i 2 $(($i+2)) $N -mimc_min_dim 0 -miproj_max_vars $N \
+            #          -miproj_fix_lvl $i -miproj_set adaptive \
+            #          $CMN
 
-        #     all_cmds -fix-$i 2 $((($i+2))) $N -mimc_min_dim 0 -miproj_max_vars $N \
-        #              -miproj_fix_lvl $i -miproj_set apriori -miproj_s_proj_sample_ratio 0. \
-        #              $CMN -miproj_double_work True
-        # done
+            all_cmds -fix-$i 2 $((($i+2))) $N -mimc_min_dim 0 -miproj_max_vars $N \
+                     -miproj_fix_lvl $i -miproj_set apriori $CMN -miproj_double_work
+        done
     done
 fi;

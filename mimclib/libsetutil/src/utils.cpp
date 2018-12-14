@@ -4,6 +4,8 @@
 #include <random>
 #include "var_list.hpp"
 
+static std::mt19937 gen;
+
 extern "C"{
     unsigned int sample_optimal_leg_pts(const unsigned int* N_per_basis,
                                         unsigned int max_dim,
@@ -31,12 +33,12 @@ std::vector<double> legendre_pol(double X, unsigned int N, double a, double b){
     }
     return ret;
 }
+
 unsigned int sample_optimal_random_leg_pts(unsigned int total_N,
                                            unsigned int* N_per_basis,
                                            unsigned int max_dim,
                                            const VarSizeList* bases_indices,
                                            double *X, double a, double b){
-    static std::mt19937 gen;
     assert(bases_indices->count() > 0);
     std::uniform_int_distribution<unsigned int> uni_int(0, bases_indices->count()-1);
     std::uniform_real_distribution<double> uni(0., 1.);
@@ -71,7 +73,6 @@ unsigned int sample_optimal_leg_pts(const unsigned int *N_per_basis,
                                     unsigned int max_dim,
                                     const VarSizeList* bases_indices,
                                     double *X, double a, double b) {
-    static std::mt19937 gen;
     assert(bases_indices->count() > 0);
     std::uniform_real_distribution<double> uni(0., 1.);
 

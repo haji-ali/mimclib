@@ -2,9 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import time
 import warnings
-import os.path
 import numpy as np
 import mimclib.test
 import mimclib.miproj as miproj
@@ -15,6 +13,9 @@ import argparse
 warnings.filterwarnings("error")
 warnings.filterwarnings("always", category=mimclib.test.ArgumentWarning)
 warnings.filterwarnings("always", category=UserWarning)
+warnings.filterwarnings("once", category=PendingDeprecationWarning)
+warnings.filterwarnings("always", category=DeprecationWarning)
+
 
 class MyRun:
     def solveFor_sin(self, alpha, arrY):
@@ -76,12 +77,9 @@ class MyRun:
             run.params.miproj_max_vars = run.params.miproj_min_vars
 
         if run.params.miproj_set == 'adaptive':
-            fnBasisFromLvl = miproj.exp_basis_from_level
-            fnBasisFromLvl = lambda beta, d=self.params.miproj_max_vars: miproj.td_basis_from_level(d, beta)
-        elif run.params.miproj_set == 'apriori' or run.params.miproj_set == 'apriori-adapt':
-            fnBasisFromLvl = lambda beta, d=self.params.miproj_max_vars: miproj.td_basis_from_level(d, beta)
+            fnBasisFromLvl = miproj.prod_basis_from_level
         else:
-            raise NotImplementedError("Unknown lvls to basis")
+            fnBasisFromLvl = lambda beta, d=self.params.miproj_max_vars: miproj.td_basis_from_level(d, beta)
 
         if run.params.miproj_pts_sampler == 'optimal':
             fnSamplePoints = miproj.sample_optimal_leg_pts
@@ -155,6 +153,7 @@ class MyRun:
         max_added = None
         if run.params.miproj_set == 'apriori' or run.params.miproj_set == 'apriori-adapt':
             max_dim = run.params.min_dim+1
+            assert(max_dim <= 2)  # At most 1 dim for discretisation, 1 for projecton space
         else:
             max_dim = 5 + (0 if len(lvls) == 0 else np.max(lvls.get_dim()))
             max_dim = np.minimum(run.params.miproj_max_vars + run.params.min_dim,
@@ -184,8 +183,7 @@ class MyRun:
         if len(lvls) >= 1:
             max_lvls = lvls.to_sparse_matrix().max(axis=0).todense()
             if max_lvls[0, 0] > run.params.miproj_max_lvl:
-                return False  # No more levels
-        return True
+                raise StopIteration  # No more levels
 
     def addExtraArguments(self, parser):
         class store_as_array(argparse._StoreAction):
@@ -205,7 +203,7 @@ class MyRun:
         qoigrp.add_argument(pre + "scale", type=float, default=10., action="store")
         qoigrp.add_argument(pre + "sigma", type=float, default=0.2, action="store")
         qoigrp.add_argument(pre + "x0", type=float, nargs='+',
-                            default=np.array([0.3,0.4,0.6]),
+                            default=np.array([0.3, 0.4, 0.6]),
                             action=store_as_array)
 
         migrp = parser.add_argument_group('miproj', 'Arguments to control projection')
@@ -240,7 +238,6 @@ class MyRun:
         migrp.add_argument(pre + "max_lvl", type=int, default=1000, action="store")
         migrp.add_argument(pre + "time", default=False, action="store_true")
 
-
     def ItrDone(self, db, run_id, run):
         if db is not None:
             run.last_itr.userdata = self.proj.user_data
@@ -249,8 +246,8 @@ class MyRun:
         self.proj.user_data = []
         return True
 
+
 if __name__ == "__main__":
-    from mimclib import ipdb
     ipdb.set_excepthook()
 
     run = MyRun()

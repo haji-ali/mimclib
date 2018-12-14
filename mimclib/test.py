@@ -13,21 +13,22 @@ import time
 
 __all__ = []
 
-
 def public(sym):
     __all__.append(sym.__name__)
     return sym
+
 
 @public
 class ArgumentWarning(Warning):
     def __init__(self, message):
         self.message = message
+
     def __str__(self):
         return self.message
 
 
 def parse_known_args(parser, return_unknown=False):
-    knowns, unknowns = parser.parse_known_args()
+    knowns, unknowns = parser.parse_known_args(namespace=mimc.Nestedspace())
     for a in unknowns:
         if a.startswith('-'):
             warnings.warn(ArgumentWarning("Argument {} was not used!".format(a)))
@@ -36,20 +37,6 @@ def parse_known_args(parser, return_unknown=False):
         return knowns, unknowns
     return knowns
 
-
-def CreateDBConnection(mimcRun):
-    db_args = {}
-    if hasattr(mimcRun.params, "db_user"):
-        db_args["user"] = mimcRun.params.db_user
-    if hasattr(mimcRun.params, "db_password"):
-        db_args["passwd"] = mimcRun.params.db_password
-    if hasattr(mimcRun.params, "db_host"):
-        db_args["host"] = mimcRun.params.db_host
-    if hasattr(mimcRun.params, "db_engine"):
-        db_args["engine"] = mimcRun.params.db_engine
-    if hasattr(mimcRun.params, "db_name"):
-        db_args["db"] = mimcRun.params.db_name
-    return mimcdb.MIMCDatabase(**db_args)
 
 def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
                        fnAddExtraArgs=None, fnInit=None, fnItrDone=None,
@@ -61,20 +48,18 @@ def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
     parser.register('type', 'bool',
                     lambda v: v.lower() in ("yes", "true", "t", "1"))
     parser.add_argument("-db_user", type=str,
-                        action="store", help="Database User")
+                        action="store", help="Database User", dest="db.user")
     parser.add_argument("-db_password", type=str,
-                        action="store", help="Database password")
+                        action="store", help="Database password", dest="db.password")
     parser.add_argument("-db_host", type=str,
-                        action="store", help="Database Host")
+                        action="store", help="Database Host", dest="db.host")
     parser.add_argument("-db_engine", type=str, default='mysql',
-                        action="store", help="Database Host")
-    parser.add_argument("-db_tag", type=str, default="NoTag",
+                        action="store", help="Database Host", dest="db.engine")
+    parser.add_argument("-db_tag", type=str,
                         action="store", help="Database Tag")
-    parser.add_argument("-db", default=False, action="store_true",
-                        help="Save in Database")
     parser.add_argument("-qoi_seed", type=int,
                         action="store", help="Seed for random generator")
-    parser.add_argument("-db_name", type=str, action="store", help="")
+    parser.add_argument("-db_name", type=str, action="store", help="", dest="db.db")
 
     if fnAddExtraArgs is not None:
         fnAddExtraArgs(parser)
@@ -100,9 +85,9 @@ def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
     if fnSeed is not None:
         fnSeed(mimcRun.params.qoi_seed)
 
-    if mimcRun.params.db:
-        db = CreateDBConnection(mimcRun)
-        mimcRun.db_data = mimc.Bunch()
+    if hasattr(mimcRun.params.db, "db"):
+        db = mimcdb.MIMCDatabase(**mimcRun.params.db)
+        mimcRun.db_data = mimc.Nestedspace()
         mimcRun.db_data.run_id = db.createRun(mimc_run=mimcRun,
                                               tag=mimcRun.params.db_tag)
         if fnItrDone is None:
@@ -124,14 +109,16 @@ def RunTest(mimcRun):
     try:
         mimcRun.doRun()
     except:
-        if mimcRun.params.db:
-            db = CreateDBConnection(mimcRun)
-            db.markRunFailed(mimcRun.db_data.run_id, total_time=time.clock()-tStart)
+        if hasattr(mimcRun.params.db, "db"):
+            db = mimcdb.MIMCDatabase(**mimcRun.params.db)
+            db.markRunFailed(mimcRun.db_data.run_id,
+                             total_time=time.clock()-tStart)
         raise   # If you don't want to raise, make sure the following code is not executed
 
-    if mimcRun.params.db:
-        db = CreateDBConnection(mimcRun)
-        db.markRunSuccessful(mimcRun.db_data.run_id, total_time=time.clock()-tStart)
+    if hasattr(mimcRun.params.db, "db"):
+        db = mimcdb.MIMCDatabase(**mimcRun.params.db)
+        db.markRunSuccessful(mimcRun.db_data.run_id,
+                             total_time=time.clock()-tStart)
     return mimcRun
 
 
@@ -167,13 +154,13 @@ def run_errors_est_program(fnExactErr=None):
                                                                 "true",
                                                                 "t", "1"))
         parser.add_argument("-db_name", type=str, action="store",
-                            help="Database Name")
+                            help="Database Name", dest="db.db")
         parser.add_argument("-db_engine", type=str, action="store",
-                            help="Database Name")
+                            help="Database Name", dest="db.engine")
         parser.add_argument("-db_user", type=str, action="store",
-                            help="Database User")
+                            help="Database User", dest="db.user")
         parser.add_argument("-db_host", type=str, action="store",
-                            help="Database Host")
+                            help="Database Host", dest="db.host")
         parser.add_argument("-db_tag", type=str, action="store",
                             help="Database Tags")
         parser.add_argument("-qoi_exact_tag", type=str, action="store")
@@ -183,19 +170,8 @@ def run_errors_est_program(fnExactErr=None):
     parser = argparse.ArgumentParser(add_help=True)
     addExtraArguments(parser)
     args = parse_known_args(parser)
-
-    db_args = dict()
-    if args.db_name is not None:
-        db_args["db"] = args.db_name
-    if args.db_user is not None:
-        db_args["user"] = args.db_user
-    if args.db_host is not None:
-        db_args["host"] = args.db_host
-    if args.db_engine is not None:
-        db_args["engine"] = args.db_engine
-
-    db = mimcdb.MIMCDatabase(**db_args)
-    if args.db_tag is None:
+    db = mimcdb.MIMCDatabase(**args.db)
+    if not hasattr(args, "db_tag"):
         warnings.warn("You did not select a database tag!!")
     print("Reading data")
 
@@ -203,7 +179,7 @@ def run_errors_est_program(fnExactErr=None):
     if len(run_data) == 0:
         raise Exception("No runs!!!")
     fnNorm = run_data[0].fn.Norm
-    if args.qoi_exact_tag is not None:
+    if hasattr(args, "qoi_exact_tag"):
         assert args.qoi_exact is None, "Multiple exact values given"
         exact_runs = db.readRuns(tag=args.qoi_exact_tag)
         from . import plot
@@ -214,7 +190,7 @@ def run_errors_est_program(fnExactErr=None):
     elif fnExactErr is not None:
         fnExactErr = lambda itrs, fn=fnExactErr: fn(itrs[0].parent, itrs)
 
-    if args.qoi_exact is not None and fnExactErr is None:
+    if hasattr(args, "qoi_exact") and fnExactErr is None:
         fnExactErr = lambda itrs, e=args.qoi_exact: \
                      fnNorm([v.calcEg() + e*-1 for v in itrs])
 

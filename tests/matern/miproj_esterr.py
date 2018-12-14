@@ -10,7 +10,8 @@ import time
 
 warnings.filterwarnings("always")
 
-def l2_error_mc(itrs, fnSample, rel_tol=0.01, maxM=1000, max_L=None):
+
+def l2_error_mc(itrs, fnSample, rel_tol=0.25, maxM=25000, max_L=None):
     if len(itrs) == 0:
         return np.array([])
 
@@ -50,7 +51,7 @@ def l2_error_mc(itrs, fnSample, rel_tol=0.01, maxM=1000, max_L=None):
         Y = np.random.uniform(-1, 1, size=(nextM-M, N))
         samples = fnSample([max_L], Y)
         errors = np.zeros((nextM-M, len(itrs)))
-        for i in xrange(0, len(itrs)):
+        for i in range(0, len(itrs)):
             errors[:, i] = (samples - val[i](Y))**2
         s1 += np.sum(errors, axis=0)
         s2 += np.sum(errors**2, axis=0)
@@ -59,7 +60,7 @@ def l2_error_mc(itrs, fnSample, rel_tol=0.01, maxM=1000, max_L=None):
 
         M += len(samples)
         err = 3*np.sqrt((s2/M - (s1/M)**2)/M)    # Approximate error of error estimate
-        max_rel_err = np.max(err / (err+np.abs(s1/M)))
+        max_rel_err = np.max(err / (np.abs(s1/M)))
         print("Estimate with", M, "samples -> max relative error: ", max_rel_err,
               "in", (time.time()-tStart)/60., "min")
         print("Expectation:", s1_E/M, ", Error:", 3*np.sqrt((s2_E/M - (s1_E/M)**2)/M))

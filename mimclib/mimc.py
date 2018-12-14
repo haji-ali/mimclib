@@ -14,12 +14,55 @@ from scipy.stats import norm
 __all__ = []
 import argparse
 
+DEBUG_TEST = 1
 VERBOSE_INFO = 1
 VERBOSE_DEBUG = 10
+
 
 def public(sym):
     __all__.append(sym.__name__)
     return sym
+
+@public
+class Nestedspace(argparse.Namespace):
+    def __setattr__(self, name, value):
+        if '.' in name:
+            group, name = name.split('.', 1)
+            ns = getattr(self, group, Nestedspace())
+            setattr(ns, name, value)
+            if len(vars(ns)) == 0:
+                ns = None
+            name, value = group, ns
+
+        if value is None:
+            # Just remove the attribute from the namespace
+            self.__dict__.pop(name, None)
+        else:
+            self.__dict__[name] = value
+
+    def __getattr__(self, name):
+        if '.' in name:
+            group, name = name.split('.', 1)
+            try:
+                ns = self.__dict__[group]
+            except KeyError:
+                raise AttributeError
+            return getattr(ns, name)
+        else:
+            raise AttributeError
+
+    def keys(self):
+        return self.__dict__.keys()
+
+    def __getitem__(self, key):
+        return self.__dict__[key]
+
+    def get(self, key, default=None):
+        return self.key if hasattr(self, key) else default
+
+
+Bunch = Nestedspace    # Backward compatibility
+
 
 class Timer():
     def __init__(self, clock=time.clock):
@@ -52,6 +95,7 @@ def _calcTheoryM(TOL, theta, Vl, Wl, active_lvls, ceil=True, minM=1,
         M = np.maximum(M, minM)
         M[np.isnan(M)] = minM
         M[np.logical_not(act)] = 0
+
     if ceil:
         M = np.ceil(M).astype(np.int)
     return M
@@ -429,17 +473,6 @@ class MIMCItrData(object):
             output += value_fmt.format(*[c[3](i) for c in columns])
         return output
 
-class Bunch(object):
-    def __init__(self, **kwargs):
-        self.__dict__ = dict([i for i in kwargs.items() if i[1] is not None])
-
-    def getDict(self):
-        return self.__dict__
-
-    def __getattr__(self, name):
-        raise AttributeError("Argument '{}' is required but not \
-provided!".format(name))
-
 
 @public
 class MIMCRun(object):
@@ -452,10 +485,10 @@ class MIMCRun(object):
 
     """
     def __init__(self, **kwargs):
-        self.fn = Bunch(# Hierarchy=None, ExtendLvls=None,
+        self.fn = Nestedspace(# Hierarchy=None, ExtendLvls=None,
                         # WorkModel=None, SampleAll=None,
                         Norm=np.abs)
-        self.params = Bunch(**kwargs)
+        self.params = Nestedspace(**kwargs)
         self.cur_start_level = 0
         self.iters = []
         dims = np.array([len(getattr(self.params, a))
@@ -773,7 +806,7 @@ max_lvl        = {}
 
     def _get_hl(self, L):
         lvls = np.arange(0, L+1).reshape((-1, 1))
-        return  self.fn.Hierarchy(lvls=lvls).reshape(1, -1)[0]
+        return self.fn.Hierarchy(lvls=lvls).reshape(1, -1)[0]
 
     def _estimateBayesianVl(self, L=None):
         if np.sum(self.all_itr.M, axis=0) == 0:
@@ -854,7 +887,7 @@ max_lvl        = {}
                 continue
             lvls = setutil.VarSizeList(np.arange(0, L+1).reshape((-1, 1)), min_dim=1)
             Wl = self.fn.WorkModel(lvls=lvls)
-            M = _calcTheoryM(TOL, theta=self._calcTheta(TOL,bias_est),
+            M = _calcTheoryM(TOL, theta=self._calcTheta(TOL, bias_est),
                              Vl=self._estimateBayesianVl(L), Wl=Wl,
                              active_lvls=self.last_itr.active_lvls,
                              Ca=self._Ca, use_rmse=self.use_rmse)
@@ -887,7 +920,10 @@ max_lvl        = {}
         if new_lvls is not None:
             self.last_itr.lvls_add_from_list(new_lvls)
         else:
-            todoM = self.fn.ExtendLvls()
+            try:
+                todoM = self.fn.ExtendLvls()
+            except StopIteration:
+                return None
         self.last_itr._levels_added()
         self.all_itr._levels_added()
         self.update_ml2r_weights()
@@ -911,9 +947,8 @@ max_lvl        = {}
         lvls = self.last_itr.get_lvls()
         lvls_count = self.last_itr.lvls_count
         assert(lvls_count == len(lvls))
-        t = np.zeros(lvls_count)
-        active = np.logical_and(totalM > self.last_itr.M,
-                                self.last_itr.active_lvls >= 0)
+        active = self.last_itr.active_lvls >= 0
+        active = np.logical_and(active, totalM > self.last_itr.M)
         totalM[np.logical_not(active)] = 0    # No need to do any samples
         totalM[active] -= self.last_itr.M[active]
         if np.sum(totalM) == 0:
@@ -977,15 +1012,16 @@ max_lvl        = {}
 
     def _update_active_lvls(self):
         if hasattr(self, "cur_start_level"):
-           lvls = self.last_itr.get_lvls().to_dense_matrix()
-           self.last_itr.active_lvls = -1*np.ones(len(lvls))
-           self.last_itr.active_lvls[lvls[:, 0] > self.cur_start_level] = 1
-           self.last_itr.active_lvls[lvls[:, 0] == self.cur_start_level] = 0
-           self.update_ml2r_weights()
+            lvls = self.last_itr.get_lvls().to_dense_matrix()
+            self.last_itr.active_lvls = -1*np.ones(len(lvls))
+            self.last_itr.active_lvls[lvls[:, 0] > self.cur_start_level] = 1
+            self.last_itr.active_lvls[lvls[:, 0] == self.cur_start_level] = 0
+            self.update_ml2r_weights()
 
     def print_info(self, *args, **kwargs):
         if self.params.verbose >= VERBOSE_INFO:
             print(*args, **kwargs)
+
     def print_debug(self, *args, **kwargs):
         if self.params.verbose >= VERBOSE_DEBUG:
             print(*args, **kwargs)
@@ -1035,12 +1071,12 @@ max_lvl        = {}
                                                   min_dim=self.params.min_dim,
                                                   moments=self.params.moments))
                     if self.params.lsq_est:
-                        self.last_itr.Q = Bunch(S=np.inf, W=np.inf,
-                                                w=self.params.w,
-                                                s=self.params.s,
-                                                theta=self.params.theta)
+                        self.last_itr.Q = Nestedspace(S=np.inf, W=np.inf,
+                                                      w=self.params.w,
+                                                      s=self.params.s,
+                                                      theta=self.params.theta)
                     else:
-                        self.last_itr.Q = Bunch(theta=self.params.theta)
+                        self.last_itr.Q = Nestedspace(theta=self.params.theta)
                     if not self.params.reuse_samples:
                         self._all_itr = self.last_itr.next_itr()
                 elif add_new_iteration:

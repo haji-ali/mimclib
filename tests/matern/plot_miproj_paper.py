@@ -1,10 +1,18 @@
-#!/usr/bin/python
+#!python
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import matplotlib as mpl
 mpl.use('Agg')
+
+import numpy as np
+import mimclib.plot as miplot
+import matplotlib.pyplot as plt
+from mimclib import ipdb
+import mimclib.setutil as setutil
+import itertools
+
 mpl.rc('text', usetex=True)
 mpl.rc('font', **{'family': 'normal', 'weight': 'demibold',
                   'size': 15})
@@ -12,15 +20,9 @@ mpl.rc('lines', linewidth=4, markersize=10, markeredgewidth=1.)
 mpl.rc('markers', fillstyle='none')
 mpl.rc('axes', labelsize=20,)
 
-import numpy as np
-import mimclib.plot as miplot
-import matplotlib.pyplot as plt
-from mimclib import ipdb
-import mimclib.setutil as setutil
-
 def plotProfits(ax, itr, *args, **kwargs):
     work_est = kwargs.pop('work_est', 'work')
-    error = itr.parent.fn.Norm(itr.calcDeltaEl())
+    error = itr.parent.fn.Norm(itr.calcEl())
     if work_est == 'time':
         work = itr.calcTl()
     else:
@@ -57,7 +59,7 @@ def plotSeeds(ax, runs, *args, **kwargs):
         itr = runs[0].last_itr
     else:
         itr = runs[0].iters[iter_idx]
-    El = itr.calcDeltaEl()
+    El = itr.calcEl()
     inds = []
     x = []
     for d in xrange(1, itr.lvls_max_dim()):
@@ -72,8 +74,7 @@ def plotSeeds(ax, runs, *args, **kwargs):
     inds = np.array(inds)
     x = np.array(x)
     line = ax.plot(x, fnNorm(El[inds]), *args, **kwargs)
-
-    if Ref_kwargs is not None:
+    if Ref_kwargs is not None and len(x) > 1:
         ax.add_line(miplot.FunctionLine2D.ExpLine(data=line[0].get_xydata(),
                                                   linewidth=2,
                                                   **Ref_kwargs))
@@ -130,7 +131,7 @@ def plotUserData(ax, runs, *args, **kwargs):
     if which == 'cond':
         ax.set_ylabel('Condition')
         line, = ax.plot(xy_binned[:, 0], xy_binned[:, 2],
-                       *args, **kwargs)
+                        *args, **kwargs)
     else:
         ax.set_ylabel('Matrix Size')
         line, = ax.plot(xy_binned[:, 0], xy_binned[:, 1], *args,
@@ -139,6 +140,7 @@ def plotUserData(ax, runs, *args, **kwargs):
     return line.get_xydata(), [line]
 
 def plot_all(runs, **kwargs):
+    runs = list(itertools.chain(*runs))
     filteritr = kwargs.pop("filteritr", miplot.filteritr_all)
     modifier = kwargs.pop("modifier", None)
     TOLs_count = len(np.unique([itr.TOL for _, itr
@@ -170,6 +172,7 @@ def plot_all(runs, **kwargs):
     Ref_kwargs = {'ls': '--', 'c':'k', 'label': label_fmt.format(label='{rate:.2g}')}
     ErrEst_kwargs = {'fmt': '--*','label': label_fmt.format(label='Error Estimate')}
     Ref_ErrEst_kwargs = {'ls': '-.', 'c':'k', 'label': label_fmt.format(label='{rate:.2g}')}
+
     try:
         miplot.plotWorkVsMaxError(ax, runs,
                                   iter_stats_args=dict(work_spacing=np.log(np.sqrt(2)),
@@ -209,7 +212,7 @@ def plot_all(runs, **kwargs):
         miplot.plot_failed(ax)
 
 
-    print_msg("plotPorfits")
+    print_msg("plotProfits")
     ax = add_fig('profits')
     plotProfits(ax, runs[0].last_itr)
     ax.set_title('Err/Work')
@@ -330,24 +333,28 @@ def plot_all(runs, **kwargs):
 
 
 def plotSingleLevel(runs, input_args, *args, **kwargs):
-    cmp_labels = ['SL', 'Adaptive ML', 'Time-Adapt ML',
-                  'TD fit ML', 'Full Adapt ML', 'TD Theory']
-    cmp_tags = [None, '-adapt', '-adapt-time',
-                '-tdfit', '-full-adapt', '-td-theory']
+    # cmp_labels = ['SL', 'Adaptive ML', 'Time-Adapt ML',
+    #               'TD fit ML', 'Full Adapt ML', 'TD Theory']
+    # cmp_tags = [None, '-adapt', '-adapt-time',
+    #             '-tdfit', '-full-adapt', '-td-theory']
 
     # cmp_labels = ['SL', 'ML', 'Adaptive ML']
     # cmp_tags = [None, '-tdfit', '-full-adapt']
+
+    cmp_labels = ['SL', 'ML', 'Adaptive ML', 'Adaptive ML - Arcsine',
+                  'Adaptive ML - Discard']
+    cmp_tags = [None, '-td-theory', '-adapt', '-adapt-arcsine', '-adapt-discard']
 
     modifier = kwargs.pop('modifier', None)
     fnNorm = kwargs.pop('fnNorm', None)
     flip = kwargs.pop('flip', True)
     Ref_kwargs = kwargs.pop('Ref_kwargs', None)
-    plotIndividual  = kwargs.pop('plot_individual', True)
+    plotIndividual = kwargs.pop('plot_individual', True)
     from mimclib import db as mimcdb
-    db = mimcdb.MIMCDatabase(**input_args.db_args)
+    db = mimcdb.MIMCDatabase(**input_args.db)
     print("Reading data")
 
-    db_tag = input_args.db_tag
+    db_tag = input_args.db_tag[0]
     for t in cmp_tags:
         if t is not None and len(t) > 0 and db_tag.endswith(t):
             db_tag = db_tag[:-len(t)]
@@ -362,6 +369,7 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
         axes.append(figures[-1].gca())
         return figures[-1].gca()
 
+    plot_time_breakdown = False
     time_vars = ['sampling_time', 'pt_sampling_time',
                  'assembly_time_1', 'assembly_time_2',
                  'projection_time']
@@ -382,14 +390,16 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
     fnWork = lambda run, i: run.iters[i].calcTotalWork()
     fnTimes = [fnWork]
     fnTimes.append(lambda run, i, v=time_vars: calcTime(run, i, v))
-    for i, v in enumerate(time_vars):
-        add_fig('times%d-vs-error' % i)
-        fnTimes.append(lambda run, i, v=time_vars[:(i+1)]: calcTime(run, i, v))
+    if plot_time_breakdown:
+        for i, v in enumerate(time_vars):
+            add_fig('times%d-vs-error' % i)
+            fnTimes.append(lambda run, i, v=time_vars[:(i+1)]: calcTime(run, i, v))
 
     fix_runs = []
     while True:
         fix_tag = db_tag + "-fix-" + str(len(fix_runs))
-        run_data = db.readRuns(tag=fix_tag, done_flag=input_args.done_flag)
+        run_data = db.readRuns(tag=fix_tag,
+                               done_flag=input_args.get("done_flag", None))
         if len(run_data) == 0:
             print("Couldn't get", fix_tag)
             break
@@ -403,17 +413,17 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
     for i, subtag in enumerate(cmp_tags):
         if i == 0:
             cmp_runs[i] = fix_runs
-        elif db_tag + subtag == input_args.db_tag:
+        elif db_tag + subtag == input_args.db_tag[0]:
             cmp_runs[i] = runs
         else:
             cmp_runs[i] = db.readRuns(tag=db_tag + subtag,
-                                      done_flag=input_args.done_flag)
+                                      done_flag=input_args.get("done_flag", None))
             if len(cmp_runs[i]) == 0:
                 print("Couldn't get", db_tag + subtag)
             else:
                 print("Got", db_tag + subtag)
 
-    if input_args.qoi_exact is not None:
+    if hasattr(input_args, "qoi_exact"):
         print("Setting errors")
         fnExactErr = lambda itrs, e=input_args.qoi_exact: \
                      fnNorm([v.calcEg() + e*-1 for v in itrs])
@@ -439,7 +449,7 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
                                           iter_stats_args=iter_stats_args,
                                           fnWork=fnTimes[i],
                                           modifier=modifier, fmt=':xk',
-                                          fnAggError=np.min,
+                                          fnAggError=np.max,
                                           linewidth=2, markersize=4,
                                           #label='\\ell={}'.format(i),
                                           alpha=0.4)
@@ -509,7 +519,7 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
             data, _ = miplot.plotWorkVsMaxError(fig_T, rr, flip=True,
                                                 modifier=modifier,
                                                 fnWork=fnTimes[i],
-                                                fnAggError=np.min,
+                                                fnAggError=np.max,
                                                 fmt='-',
                                                 iter_stats_args=iter_stats_args,
                                                 Ref_kwargs=Ref_kwargs

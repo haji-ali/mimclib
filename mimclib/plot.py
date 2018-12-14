@@ -2,10 +2,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-# import matplotlib
-# Force matplotlib to not use any Xwindows backend.
-# matplotlib.use('Agg')
-
 import numpy as np
 import matplotlib.pylab as plt
 from . import mimc
@@ -15,12 +11,12 @@ try:
     from matplotlib2tikz import save as tikz_save
 except:
     pass
+
 from . import db as mimcdb
 from . import test
 import argparse
 import warnings
 import itertools
-from mimclib import Bunch
 from scipy.stats import norm
 import traceback
 
@@ -364,7 +360,7 @@ def __calc_moments(runs, seed=None, direction=None, fnNorm=None):
         central_delta_moments[:, m-1] = fnNorm(mimc.compute_central_moment(psums_delta, M, m))
         central_fine_moments[:, m-1] = fnNorm(mimc.compute_central_moment(psums_fine, M, m))
 
-    ret = Bunch()
+    ret = mimc.Nestedspace()
     ret.central_delta_moments = central_delta_moments
     ret.central_fine_moments = central_fine_moments
     ret.Vl_estimate = Vl_estimate
@@ -381,7 +377,7 @@ def plot(ax, *args, **kwargs):
     else:
         kwargs.pop('yerr', None)   # Discard error
         if "fmt" in kwargs:        # Normalize behavior of errorbar() and plot()
-            args = (kwargs.pop('fmt'), ) + args
+            args = args + (kwargs.pop('fmt'), )
         return ax.plot(*args, **kwargs)
 
 @public
@@ -1762,16 +1758,15 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
         warnings.simplefilter('ignore', MatplotlibDeprecationWarning)
     except:
         pass   # Ignore
-
     def addExtraArguments(parser):
         parser.add_argument("-db_name", type=str, action="store",
-                            help="Database Name")
+                            help="Database Name", dest='db.db')
         parser.add_argument("-db_engine", type=str, action="store",
-                            help="Database Name")
+                            help="Database Name", dest='db.engine')
         parser.add_argument("-db_user", type=str, action="store",
-                            help="Database User")
+                            help="Database User", dest='db.user')
         parser.add_argument("-db_host", type=str, action="store",
-                            help="Database Host")
+                            help="Database Host", dest='db.host')
         parser.add_argument("-db_tag", type=str, action="store",
                             nargs='+', help="Database Tags")
         parser.add_argument("-label_fmt", type=str, action="store",
@@ -1784,11 +1779,11 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
                             help="Command to execute after plotting")
         parser.add_argument("-verbose", default=False, action="store_true")
         parser.add_argument("-filteritr", type=str, action="store",
+                            default='all',
                             choices=['convergent', 'all', 'last'])
         parser.add_argument("-abs_err", dest='relative',
                             action="store_false", default=True)
-        parser.add_argument("-done_flag", type=int, nargs='+',
-                            action="store", default=None)
+        parser.add_argument("-done_flag", type=int, nargs='+', action="store")
         parser.add_argument("-qoi_exact_tag", type=str, action="store")
         parser.add_argument("-formats", type=str, action="store",
                             nargs="+", default=["pdf"])
@@ -1799,21 +1794,12 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
     for k in kwargs.keys():
         args.__dict__[k] = kwargs[k]
 
-    db_args = dict()
-    if args.db_name is not None:
-        db_args["db"] = args.db_name
-    if args.db_user is not None:
-        db_args["user"] = args.db_user
-    if args.db_host is not None:
-        db_args["host"] = args.db_host
-    if args.db_engine is not None:
-        db_args["engine"] = args.db_engine
-    if args.o is None:
+    if not hasattr(args, "o"):
         warnings.warn("Outputting to mimclib_out.pdf")
         args.o = "mimclib_out"
 
-    db = mimcdb.MIMCDatabase(**db_args)
-    if args.db_tag is None:
+    db = mimcdb.MIMCDatabase(**args.db)
+    if not hasattr(args, "db_tag"):
         warnings.warn("You did not select a database tag!!")
     if args.verbose:
         print("Reading data")
@@ -1821,7 +1807,8 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
     total_runs = 0
     run_data = []
     for db_tag in args.db_tag:
-        run_data.append(db.readRuns(tag=db_tag, done_flag=args.done_flag))
+        run_data.append(db.readRuns(tag=db_tag,
+                                    done_flag=args.get("done_flag", None)))
         total_runs += len(run_data[-1])
 
     if total_runs == 0:
@@ -1831,17 +1818,18 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
     if args.verbose:
         print("Plotting data")
 
-    if args.qoi_exact_tag is not None:
+    if hasattr(args, "qoi_exact_tag"):
         assert args.qoi_exact is None, "An exact value and exact tag are given"
         if args.qoi_exact_tag in args.db_tag:
             args.qoi_exact, _ = estimate_exact(run_data[args.db_tag.index(args.qoi_exact_tag)])
         else:
-            exact_runs = db.readRuns(tag=args.qoi_exact_tag, done_flag=args.done_flag)
+            exact_runs = db.readRuns(tag=args.qoi_exact_tag,
+                                     done_flag=args.get("done_flag", None))
             args.qoi_exact, _ = estimate_exact(exact_runs)
         if args.verbose:
             print("Estimated exact value is {}".format(args.qoi_exact))
 
-    if args.qoi_exact is not None:
+    if hasattr(args, "qoi_exact"):
         assert fnExactErr is None, "An exact value and an exact function are given"
         fnExactErr = lambda itrs, e=args.qoi_exact: \
                      fnNorm([v.calcEg() + e*-1 for v in itrs])
@@ -1850,7 +1838,6 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
         # TODO: Need to somehow set it as relative
         modifier = 1.
 
-    filteritr = None
     if args.filteritr == 'last':
         filteritr = filteritr_last
     elif args.filteritr == 'convergent':
@@ -1868,7 +1855,7 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
                      modifier=modifier if args.relative else None,
                      fnNorm=fnNorm,
                      filteritr=filteritr,
-                     input_args=vars(args).copy())
+                     input_args=args)
 
     if args.verbose:
         print("Saving file")
@@ -1883,10 +1870,11 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
         for i, fig in enumerate(figures):
             print("Saving", fig.label)
             tikz_save("{}/{}.tex".format(dir_name, fig.label), fig,
+                      manual_legend=True,
                       show_info=False,
                       figurewidth=r'\figurewidth',
                       figureheight=r'\figureheight',
                       figlabel=r'\figlabel')
 
-    if args.cmd is not None:
+    if hasattr(args, "cmd"):
         os.system(args.cmd.format(args.o))

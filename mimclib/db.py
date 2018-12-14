@@ -7,6 +7,7 @@ import pickle
 from . import setutil
 import sys
 import io
+import dill
 
 import hashlib
 __all__ = []
@@ -16,25 +17,29 @@ def public(sym):
     return sym
 
 def _md5(string):
-    return hashlib.md5(string).hexdigest()
+    return hashlib.md5(string.encode()).hexdigest()
 
-def _pickle(obj, dump=pickle.dump):
+def _pickle(obj, use_dill=False):
     import MySQLdb
     with io.BytesIO() as f:
-        dump(obj, f, protocol=3)
+        if use_dill:
+            dill.dump(obj, f, protocol=3)
+        else:
+            pickle.dump(obj, f, protocol=3)
         f.seek(0)
         return MySQLdb.Binary(f.read())
 
 
-def _unpickle(obj, load=pickle.load):
+def _unpickle(obj, use_dill=False):
     try:
         with io.BytesIO(obj) as f:
-            return load(f)
+            return dill.load(f) if use_dill else pickle.load(f)
     except UnicodeDecodeError:
         # This probably means that the data was saved using the
         # old python2 pickle. Try a different encoding.
+        assert(not use_dill)   # dill is not backward compatible
         with io.BytesIO(obj) as f:
-            return load(f, encoding='latin1')
+            return pickle.load(f, encoding='latin1')
 
 def _nan2none(arr):
     return [None if not np.isfinite(x) else x for x in arr]
@@ -280,14 +285,16 @@ class MIMCDatabase(object):
                   mimc_run=None, comment=""):
         TOL = TOL or mimc_run.params.TOL
         params = params or mimc_run.params
-        fn = fn or dict(filter(lambda i:i[0] in "Norm",
-                               mimc_run.fn.getDict().iteritems())) # Only save the Norm function
+        if fn is None and hasattr(mimc_run.fn, "Norm"):
+            fn = {"Norm": mimc_run.fn.Norm}  # Only save the Norm function
+        else:
+            fn = dict()
         import dill
         with self.connect() as cur:
             cur.execute('''
             INSERT INTO tbl_runs(creation_date, TOL, tag, params, fn, done_flag, comment)
             VALUES(datetime(), ?, ?, ?, ?, -1, ?)''',
-                        [TOL, tag, _pickle(params), _pickle(fn, dump=dill.dump), comment])
+                        [TOL, tag, _pickle(params), _pickle(fn, use_dill=True), comment])
             return cur.getLastRowID()
 
     def markRunDone(self, run_id, flag, total_time=None, comment=''):
@@ -402,7 +409,7 @@ ORDER BY dr.run_id, dr.iteration_idx
             dictIters[run_id] = list(itr)
 
         for run_data in runAll:
-            run = mimc.MIMCRun(**_unpickle(run_data[1]).getDict())
+            run = mimc.MIMCRun(**_unpickle(run_data[1]))
             run.db_data = mimc.Bunch()
             run.db_data.finalTOL = run_data[2]
             run.db_data.comment = run_data[3]
@@ -410,8 +417,9 @@ ORDER BY dr.run_id, dr.iteration_idx
             run.db_data.total_time = run_data[6]
             run.db_data.creation_date = run_data[7]
             run.db_data.run_id = run_data[0]
+            #run.db_data.fnNorm = run_data[4]  # Why?
 
-            run.setFunctions(**_unpickle(run_data[4], load=dill.load))
+            run.setFunctions(**_unpickle(run_data[4], use_dill=True))
             lstruns.append(run)
             if run.db_data.run_id not in dictIters:
                 continue
@@ -453,7 +461,6 @@ ORDER BY dr.run_id, dr.iteration_idx
                                          psums_fine=_unpickle(l[3]))
                     iteration.Vl_estimate[k] = _none2nan(l[7])
                     iteration.weights[k] = l[9]
-
         return lstruns
 
     def connect(self):
@@ -509,7 +516,7 @@ ORDER BY dr.run_id, dr.iteration_idx
             return []
         runs = self.readRunsByID(runs_ids)
         if discard_0_itr:
-            return filter(lambda r: len(r.iters) > 0, runs)
+            return list(filter(lambda r: len(r.iters) > 0, runs))
         return runs
 
     def update_exact_errors(self, runs, fnItrError=None):
@@ -539,21 +546,20 @@ def export_db(tag, from_db, to_db, verbose=False):
         with to_db.connect() as to_cur:
             if verbose:
                 print("Getting runs")
-            runs = np.array(from_cur.execute(
+            runs = from_cur.execute(
                 'SELECT run_id, creation_date, TOL, done_flag, tag, totalTime,\
  comment, fn, params FROM tbl_runs WHERE tag LIKE ?',
-                [tag]).fetchall())
+                [tag]).fetchall()
             for i, r in enumerate(runs):
                 to_cur.execute('INSERT INTO tbl_runs(creation_date, TOL, \
 done_flag, tag, totalTime, comment, fn, params)\
                 VALUES(?, ?, ?, ?, ?, ?, ?, ?)', r[1:])
                 new_run_id = to_cur.getLastRowID()
-
-                iters = np.array(from_cur.execute(
+                iters = from_cur.execute(
                     'SELECT iter_id, TOL, bias, stat_error, creation_date, \
 totalTime, Qparams, userdata, iteration_idx, exact_error \
 FROM tbl_iters WHERE run_id=?',
-                    [r[0]]).fetchall())
+                    [r[0]]).fetchall()
                 for j, itr in enumerate(iters):
                     if verbose:
                         sys.stdout.write("\rDoing itr {}/{} {}/{}".format(i, len(runs), j, len(iters)))
@@ -561,17 +567,16 @@ FROM tbl_iters WHERE run_id=?',
                     to_cur.execute('INSERT INTO tbl_iters(run_id, TOL, bias, \
 stat_error, creation_date, totalTime, Qparams, userdata, \
 iteration_idx, exact_error) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                                   [new_run_id] + itr[1:].tolist())
+                                   (new_run_id, ) + itr[1:])
                     new_iter_id = to_cur.getLastRowID()
-
-                    lvls = np.array(from_cur.execute(
+                    lvls = from_cur.execute(
                         'SELECT lvl, lvl_hash, El, Vl, tT, tW, Ml, psums_delta, \
 psums_fine, active FROM tbl_lvls WHERE iter_id=?',
-                        [itr[0]]).fetchall())
+                        [itr[0]]).fetchall()
                     for lvl in lvls:
                         to_cur.execute('INSERT INTO tbl_lvls(iter_id, lvl, \
 lvl_hash, El, Vl, tT, tW, Ml, psums_delta, psums_fine, active)\
                         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                                       [new_iter_id] + lvl.tolist())
+                                       (new_iter_id, ) + lvl)
                 if verbose:
                     sys.stdout.write('\n')

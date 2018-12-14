@@ -211,7 +211,6 @@ __lib__.VarSizeList_check_errors.argtypes = [ct.c_voidp,
                                              __arr_bool__,
                                              ct.c_uint32]
 
-
 @public
 class VarSizeList(object):
     def __init__(self, inds=None, **kwargs):
@@ -247,7 +246,7 @@ class VarSizeList(object):
         return self.copy()
 
     def __del__(self):
-        if self._handle is not None:
+        if hasattr(self, "_handle") and self._handle is not None:
             __lib__.FreeIndexSet(self._handle)
             self._handle = None
 
@@ -526,7 +525,7 @@ class ProfCalculator(object):
     #     return indSet, profits
 
     def __del__(self):
-        if self._handle is not None:
+        if hasattr(self, "_handle") and self._handle is not None:
             __lib__.FreeProfitCalculator(self._handle)
             self._handle = None
 
@@ -604,7 +603,9 @@ class Tree(object):
             self._handle = _handle
 
     def __del__(self):
-        __lib__.Tree_free(self._handle)
+        if hasattr(self, "_handle") and self._handle is not None:
+            __lib__.Tree_free(self._handle)
+            self._handle = None
 
     def add_node(self, value, data, eps=1e-14):
         value = np.array(value, dtype=np.float)

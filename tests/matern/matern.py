@@ -115,8 +115,9 @@ class SField_Matern(object):
     def Init():
         import sys
         count = len(sys.argv)
-        arr = (ct.c_char_p * len(sys.argv))()
-        arr[:] = sys.argv
+        arr = (ct.c_char_p * count)()
+        for i, v in enumerate(sys.argv):
+            arr[i] = v.encode('utf8')
         __lib__.myPetscInit(count, arr)
 
     @staticmethod
