@@ -490,8 +490,6 @@ def td_basis_from_level(d, beta):
     b = 0 if len(beta) == 0 else beta[0]
     basis = setutil.VarSizeList()
     basis.expand_set(td_prof, d, max_prof=2**(b+1)-1)
-    if b == 0:
-        return basis
     profits = basis.calc_log_prof(td_prof)
     return basis.sublist(np.logical_and(profits >= 2**b-1, profits < 2**(b+1)-1))
 
