@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import warnings
 import numpy as np
+import time
 import mimclib.test
 import mimclib.miproj as miproj
 from mimclib import setutil
@@ -69,6 +70,7 @@ class MyRun:
     def initRun(self, run):
         self.prev_val = 0
         self.params = run.params
+        self.timeStart = time.time()
 
         if run.params.miproj_min_vars > run.params.miproj_max_vars:
             warnings.warn("miproj_min_vars is greater than run.params.miproj_max_vars, setting both to the minimum")
@@ -182,7 +184,8 @@ class MyRun:
                     break
         if len(lvls) >= 1:
             max_lvls = lvls.to_sparse_matrix().max(axis=0).todense()
-            if max_lvls[0, 0] > run.params.miproj_max_lvl:
+            if max_lvls[0, 0] > run.params.miproj_max_lvl \
+               or time.time() - self.timeStart > 1e4: # Stop after 10000 seconds
                 raise StopIteration  # No more levels
 
     def addExtraArguments(self, parser):

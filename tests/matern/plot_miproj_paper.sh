@@ -4,6 +4,9 @@
 DBHOST="129.67.187.118" # Ultra-magnus
 DBHOST="129.67.184.182" # mimic
 DB_CONN="-db_engine mysql -db_name mimc -db_host ${DBHOST}"
+
+DB_CONN="-db_engine sqlite -db_name $OUTPUT_DIR/miproj/postrev.sqlite"
+
 EST_CMD="OPENBLAS_NUM_THREADS=40 python miproj_esterr.py "
 EXAMPLE='sf-kink'
 BASETAG="postrev-$EXAMPLE-"
@@ -17,9 +20,10 @@ BASETAG="postrev-$EXAMPLE-"
 
 for N in 2 3 4 6
 do
+    mkdir -p $OUTPUT_DIR/miproj/poisson-kink-$N
     #echo $EST_CMD $DB_CONN -db_tag "sf-kink-2-$N%" "&& "
     echo python plot_miproj_paper.py $DB_CONN \
-         -db_tag ${BASETAG}2-$N-td-theory -o output/poisson-kink-$N \
+         -db_tag ${BASETAG}2-$N-td-theory -o $OUTPUT_DIR/miproj/poisson-kink-$N \
          -formats pdf tikz -abs_err \
-         -verbose -data_file output/poisson-kink-$N/data.dat # -qoi_exact_tag sf-kink-2-$N-adapt
+         -verbose -data_file $OUTPUT_DIR/miproj/poisson-kink-$N/data.dat # -qoi_exact_tag sf-kink-2-$N-adapt
 done

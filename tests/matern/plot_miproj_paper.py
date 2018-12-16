@@ -20,6 +20,7 @@ mpl.rc('lines', linewidth=4, markersize=10, markeredgewidth=1.)
 mpl.rc('markers', fillstyle='none')
 mpl.rc('axes', labelsize=20,)
 
+
 def plotProfits(ax, itr, *args, **kwargs):
     work_est = kwargs.pop('work_est', 'work')
     error = itr.parent.fn.Norm(itr.calcEl())
@@ -44,6 +45,7 @@ def plotProfits(ax, itr, *args, **kwargs):
     ax.contourf(X, Y, data)
     ax.set_xlabel('$\\ell_1$')
     ax.set_ylabel('$\\ell_2$')
+
 
 def plotSeeds(ax, runs, *args, **kwargs):
     ax.set_yscale('log')
@@ -79,6 +81,7 @@ def plotSeeds(ax, runs, *args, **kwargs):
                                                   linewidth=2,
                                                   **Ref_kwargs))
     return line[0].get_xydata(), [line]
+
 
 def plotBestNTerm(ax, runs, *args, **kwargs):
     ax.set_yscale('log')

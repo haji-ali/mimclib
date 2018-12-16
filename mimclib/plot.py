@@ -1872,7 +1872,8 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
             os.makedirs(dir_name)
         for i, fig in enumerate(figures):
             print("Saving", fig.label)
-            data_file = DataFile(r'\loadedtable') if hasattr(args, "data_file") else None
+            data_file = DataFile(r'\loadedtable', args.data_file,
+                                 transpose=True) if hasattr(args, "data_file") else None
 
             tikz_save("{}/{}.tex".format(dir_name, fig.label), fig,
                       manual_legend=True,
@@ -1882,7 +1883,7 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
                       figlabel=r'\figlabel',
                       data_file=data_file)
             if data_file is not None:
-                data_file.write(args.data_file, transpose=True)
+                data_file.write()
 
     if hasattr(args, "cmd"):
         os.system(args.cmd.format(args.o))
