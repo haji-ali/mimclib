@@ -317,13 +317,13 @@ class MIWProjSampler(object):
                 X, N_done = self.fnSamplePoints(N_todo, sam_col.basis, sam_col.min_dim)
                 N_done[:len(sam_col.N_per_basis)] += sam_col.N_per_basis
                 sam_col.N_per_basis = N_done
-                sam_col.pt_sampling_time += timer.toc()
+                pt_sampling_time = timer.toc()
 
                 timer.tic()
                 sam_col.add_points(fnSample, sub_alphas, X)
-                sam_col.sampling_time += timer.toc()
+                sampling_time = timer.toc()
             else:
-                sam_col.pt_sampling_time += timer.toc()
+                pt_sampling_time = timer.toc()
 
             timer.tic()
             # sam_col.basis_values.re size(len(sam_col.X), len(sam_col.basis))
@@ -379,19 +379,22 @@ class MIWProjSampler(object):
                     psums_delta[sel_lvls, 0] += projections*mods[i]
             projection_time = timer.toc()
             # For now, only compute sampling time
+            sam_col.sampling_time += sampling_time
+            sam_col.pt_sampling_time = pt_sampling_time
             time_taken = sam_col.sampling_time + sam_col.pt_sampling_time
             #time_taken += assembly_time_1 + assembly_time_2 + projection_time
             total_time[sel_lvls] = time_taken * totalN_per_beta / np.sum(totalN_per_beta)
+            total_time[sel_lvls] += assembly_time_1 + assembly_time_2 + projection_time
             total_work[sel_lvls] = work_per_sample * totalN_per_beta + \
                                    self.proj_sample_ratio * np.cumsum(totalN_per_beta) * np.cumsum(totalBasis_per_beta)
-            total_work[sel_lvls] += assembly_time_1 + assembly_time_2 + projection_time
+
             self.user_data.append(Bunch(alpha=alpha,
                                         max_cond=max_cond,
                                         work_per_sample=work_per_sample,
                                         matrix_size=BW.shape[1],
                                         todoN_per_beta=todoN_per_beta,
-                                        sampling_time=sam_col.sampling_time,
-                                        pt_sampling_time=sam_col.pt_sampling_time,
+                                        sampling_time=sampling_time,
+                                        pt_sampling_time=pt_sampling_time,
                                         assembly_time_1=assembly_time_1,
                                         assembly_time_2=assembly_time_2,
                                         projection_time=projection_time))
