@@ -264,6 +264,12 @@ class MIWProjSampler(object):
         from .mimc import Bunch
         timer = mimc.Timer(clock=time.time)
         for alpha, ind in self.alpha_dict.items():
+            sampling_time = 0
+            pt_sampling_time = 0
+            assembly_time_1 = 0
+            assembly_time_2 = 0
+            projection_time = 0
+
             timer.tic()
             sam_col = self.prev_samples[ind]
             sel_lvls = np.nonzero(self.alpha_ind == ind)[0]
@@ -336,12 +342,13 @@ class MIWProjSampler(object):
             from scipy.linalg import solve
             from scipy.sparse.linalg import gmres, LinearOperator
             BW = np.sqrt(W)[:, None] * basis_values
+            BWT = BW.transpose()
             if self.direct:
-                G = BW.transpose().dot(BW)
+                G = BWT.dot(BW)
             else:
                 G = LinearOperator((BW.shape[1], BW.shape[1]),
-                                   matvec=lambda v: np.dot(BW.transpose(), np.dot(BW, v)),
-                                   rmatvec=lambda v: np.dot(BW, np.dot(BW.transpose(), v)))
+                                   matvec=lambda v: np.dot(BWT, np.dot(BW, v)),
+                                   rmatvec=lambda v: np.dot(BW, np.dot(BWT, v)))
             assembly_time_2 = timer.toc()
 
             max_cond = np.nan
@@ -391,7 +398,7 @@ class MIWProjSampler(object):
             self.user_data.append(Bunch(alpha=alpha,
                                         max_cond=max_cond,
                                         work_per_sample=work_per_sample,
-                                        matrix_size=BW.shape[1],
+                                        matrix_size=BW.shape,
                                         todoN_per_beta=todoN_per_beta,
                                         sampling_time=sampling_time,
                                         pt_sampling_time=pt_sampling_time,
