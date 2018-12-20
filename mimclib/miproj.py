@@ -32,9 +32,35 @@ __lib__.sample_optimal_random_leg_pts.argtypes = [ct.c_uint32,
                                                   npct.ndpointer(dtype=np.double, ndim=1, flags='CONTIGUOUS'),
                                                   ct.c_double, ct.c_double]
 
+__lib__.evaluate_legendre_basis.restype = None
+__lib__.evaluate_legendre_basis.argtypes = [ct.c_voidp,
+                                            ct.c_uint32,
+                                            ct.c_uint32,
+                                            npct.ndpointer(dtype=np.double,
+                                                           ndim=1,
+                                                           flags='CONTIGUOUS'),
+                                            ct.c_uint32,
+                                            ct.c_uint32,
+                                            npct.ndpointer(dtype=np.double,
+                                                           ndim=1,
+                                                           flags='CONTIGUOUS')]
+
+@public
+def evaluate_legendre_basis(basis_indices, X, basis_start=0,
+                            basis_count=None):
+    if basis_count is None:
+        basis_count = len(basis_indices)-basis_start
+    val = np.empty(basis_count * len(X))
+    X = np.array(X)
+    __lib__.evaluate_legendre_basis(basis_indices._handle, basis_start,
+                                    basis_count,
+                                    X.reshape(-1),
+                                    X.shape[1], len(X), val)
+    return val.reshape(len(X), basis_count)
+
 @public
 def sample_optimal_leg_pts(N_per_basis, bases_indices, min_dim,
-                           random=False,interval=(-1, 1)):
+                           random=False, interval=(-1, 1)):
     if random:
         totalN = np.ceil(np.sum(N_per_basis))
     else:
@@ -67,10 +93,8 @@ coefficients. It assumes that the basis is orthonormal
 """
 @public
 class TensorExpansion(object):
-    def __init__(self, fnBasis, base_indices, coefficients):
-        # fnBasis takes (X, n) where X is a list of 1-D points and n is the
-        #         max-degree. Returns list of basis evaluated up to n
-        self.fnBasis = fnBasis
+    def __init__(self, fnEvalBasis, base_indices, coefficients):
+        self.fnEvalBasis = fnEvalBasis
         self.base_indices = base_indices
         self.coefficients = coefficients
 
@@ -86,8 +110,7 @@ class TensorExpansion(object):
             X = X[None, None] # Scalar
         elif len(X.shape) == 1:
             X = X[:, None] # vector
-        return TensorExpansion.evaluate_basis(self.fnBasis,
-                                              self.base_indices, X).dot(self.coefficients)
+        return fnEvalBasis(self.base_indices, X).dot(self.coefficients)
 
     @staticmethod
     def evaluate_basis(fnBasis, base_indices, X):
@@ -104,8 +127,9 @@ class TensorExpansion(object):
         X = np.array(X)
         if len(X.shape) == 1:
             X.reshape((-1, 1))
+        # TODO: Find a way to do this
         max_deg = base_indices.to_sparse_matrix().max(axis=0).toarray()[0]
-        assert len(max_deg) >= base_indices.max_dim(), "TEMP: Strange error"
+
         rdim = np.minimum(X.shape[1], base_indices.max_dim())
         values = np.ones((len(X), len(base_indices)))
         basis_values = np.empty(rdim, dtype=object)
@@ -132,10 +156,10 @@ class TensorExpansion(object):
         coeffs = np.zeros(len(res_base))
         coeffs[:len(self.base_indices)] = self.coefficients
         coeffs[ind_other] += other.coefficients
-        return TensorExpansion(self.fnBasis, res_base, coeffs)
+        return TensorExpansion(self.fnEvalBasis, res_base, coeffs)
 
     def __mul__(self, scale):
-        return TensorExpansion(self.fnBasis,
+        return TensorExpansion(self.fnEvalBasis,
                                self.base_indices.copy(),
                                self.coefficients*scale)
 
@@ -168,6 +192,41 @@ class MIWProjSampler(object):
             self.N_per_basis = np.empty(0, dtype=np.uint32)
             self.sampling_time = 0
             self.pt_sampling_time = 0
+            self.basis_values = None
+
+        def update_basis_values(self, fnEvalBasis):
+            if self.basis_values is None:
+                self.basis_values = fnEvalBasis(self.basis, self.X)
+                return self.basis_values
+
+            prev_basis = self.basis_values.shape[1]
+            prev_pts = self.basis_values.shape[0]
+            if prev_basis == len(self.basis) and prev_pts == len(self.X):
+                return self.basis_values # No change
+
+            X = np.array(self.X)
+
+            A = fnEvalBasis(self.basis, X[prev_pts:, :], 0,
+                            prev_basis) if len(X) > prev_pts else None
+            B = self.basis_values
+            C = fnEvalBasis(self.basis, X, prev_basis) if len(self.basis) > prev_basis else None
+
+            BV = fnEvalBasis(self.basis, X)
+            if A is None:
+                self.basis_values = np.block([B, C])
+            elif C is None:
+                self.basis_values = np.block([[B], [A]])
+            else:
+                self.basis_values = np.block([[B, C[:prev_pts, :]],
+                                              [A, C[prev_pts:, :]]])
+
+            from . import ipdb
+            ipdb.embed()
+
+            assert(np.sum(np.abs(BV - self.basis_values)) == 0)
+
+            return self.basis_values
+
 
         def add_points(self, fnSample, alphas, X):
             self.X.extend(X.tolist())
@@ -183,14 +242,14 @@ class MIWProjSampler(object):
     def __init__(self, d=0,  # d is the spatial dimension
                  min_dim=1, # Minimum stochastic dimensions
                  max_dim=None,
-                 fnBasis=None,
+                 fnEvalBasis=None,
                  fnSamplesCount=None,
                  fnSamplePoints=None,
                  fnBasisFromLvl=None,
                  fnWeightPoints=None,
                  fnWorkModel=None,
                  reuse_samples=False, proj_sample_ratio=0):
-        self.fnBasis = fnBasis
+        self.fnEvalBasis = fnEvalBasis
         # Returns samples count of a projection index to ensure stability
         self.fnSamplesCount = fnSamplesCount if fnSamplesCount is not None else default_samples_count
         # Returns point sample and their weights
@@ -332,10 +391,10 @@ class MIWProjSampler(object):
                 pt_sampling_time = timer.toc()
 
             timer.tic()
-            # sam_col.basis_values.re size(len(sam_col.X), len(sam_col.basis))
+            # sam_col.basis_values.resize(len(sam_col.X), len(sam_col.basis))
             # TODO: should only compute new basis_values
-            basis_values = TensorExpansion.evaluate_basis(
-                self.fnBasis, sam_col.basis, sam_col.X)
+            basis_values = sam_col.update_basis_values(self.fnEvalBasis)
+
             W = self.fnWeightPoints(sam_col.X, basis_values)
             assembly_time_1 = timer.toc()
             timer.tic()
@@ -374,11 +433,11 @@ class MIWProjSampler(object):
                     #     sel_coeff = np.ones(len(coeffs), dtype=np.Boole)
                     # else:
                     sel_coeff = sam_col.pols_to_beta == j
-                    projections[j] = TensorExpansion(fnBasis=self.fnBasis,
+                    projections[j] = TensorExpansion(fnEvalBasis=self.fnEvalBasis,
                                                      base_indices=sam_col.basis.sublist(sel_coeff),
                                                      coefficients=coeffs[sel_coeff])
-                assert(np.all(np.sum(projections).coefficients == coeffs))
-                assert(len(sam_col.basis.set_diff(np.sum(projections).base_indices)) == 0)
+                # assert(np.all(np.sum(projections).coefficients == coeffs))
+                # assert(len(sam_col.basis.set_diff(np.sum(projections).base_indices)) == 0)
                 if i == 0:
                     psums_delta[sel_lvls, 0] = projections*mods[i]
                     psums_fine[sel_lvls, 0] = projections

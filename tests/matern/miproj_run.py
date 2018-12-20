@@ -104,7 +104,8 @@ class MyRun:
         self.proj = miproj.MIWProjSampler(d=run.params.min_dim,
                                           min_dim=run.params.miproj_min_vars,
                                           max_dim=run.params.miproj_max_vars,
-                                          fnBasis=miproj.legendre_polynomials,
+                                          #fnEvalBasis=lambda S, X: miproj.TensorExpansion(miproj.legendre_polynomials, S, X),
+                                          fnEvalBasis=miproj.evaluate_legendre_basis,
                                           proj_sample_ratio=run.params.miproj_s_proj_sample_ratio,
                                           fnBasisFromLvl=fnBasisFromLvl,
                                           fnSamplePoints=fnSamplePoints,
@@ -235,7 +236,7 @@ class MyRun:
                            dest="miproj_reuse_samples",
                            default=True,
                            action="store_false")
-        migrp.add_argument(pre + "fix_lvl", type=int, default=3, action="store")
+        migrp.add_argument(pre + "fix_lvl", type=int, action="store")
         migrp.add_argument(pre + "min_vars", type=int, default=10, action="store")
         migrp.add_argument(pre + "max_vars", type=int, default=10**6, action="store")
         migrp.add_argument(pre + "max_lvl", type=int, default=1000, action="store")

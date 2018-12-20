@@ -372,11 +372,12 @@ def __calc_moments(runs, seed=None, direction=None, fnNorm=None):
 
 @public
 def plot(ax, *args, **kwargs):
-    errbar = kwargs.pop('errbar', True)
-    if 'yerr' in kwargs and kwargs['yerr'] is not None and errbar:
+    if (('yerr' in kwargs and kwargs['yerr'] is not None) or \
+        ('xerr' in kwargs and kwargs['xerr'] is not None) ):
         return ax.errorbar(*args, **kwargs)
     else:
-        kwargs.pop('yerr', None)   # Discard error
+        # kwargs.pop('yerr', None)   # Discard error
+        # kwargs.pop('xerr', None)   # Discard error
         if "fmt" in kwargs:        # Normalize behavior of errorbar() and plot()
             args = args + (kwargs.pop('fmt'), )
         return ax.plot(*args, **kwargs)
@@ -411,7 +412,7 @@ def enum_iter_i(runs, fnFilter=filteritr_all):
                 yield i, r, r.iters[i]
 
 @public
-def computeIterationStats(runs, fnItrStats, arr_fnAgg, work_bins=50,
+def computeIterationStats(runs, fnItrStats, arr_fnAgg, work_bins=None,
                           filteritr=filteritr_all, work_spacing=None,
                           fnFilterData=None):
     xy = []
@@ -432,22 +433,27 @@ def computeIterationStats(runs, fnItrStats, arr_fnAgg, work_bins=50,
         xy = fnFilterData(xy)
     if len(xy) == 0:
         return xy
-    bins = np.digitize(xy[:, 0], np.linspace(np.min(xy[:, 0]),
-                                             np.max(xy[:, 0]), work_bins))
-    bins[bins == work_bins] = work_bins-1
-    ubins = np.unique(bins)
-    xy_binned = np.zeros((len(ubins), len(arr_fnAgg)))
-    for i, b in enumerate(ubins):
-        d = xy[bins==b, :]
-        for j in range(0, len(arr_fnAgg)):
-            xy_binned[i, j] = arr_fnAgg[j](d[:, j])
 
-    xy_binned = xy_binned[xy_binned[:, 0].argsort(), :]
+    if work_bins is not None:
+        bins = np.digitize(xy[:, 0], np.linspace(np.min(xy[:, 0]),
+                                                 np.max(xy[:, 0]), work_bins))
+        bins[bins == work_bins] = work_bins-1
+        ubins = np.unique(bins)
+        xy_binned = np.zeros((len(ubins), len(arr_fnAgg)))
+        for i, b in enumerate(ubins):
+            d = xy[bins==b, :]
+            for j in range(0, len(arr_fnAgg)):
+                xy_binned[i, j] = arr_fnAgg[j](d[:, j])
+
+        xy_binned = xy_binned[xy_binned[:, 0].argsort(), :]
+    else:
+        xy_binned = xy[xy[:, 0].argsort(), :]
+
     if work_spacing is not None:
         sel = np.zeros(xy_binned.shape[0], dtype=np.bool)
         prevWork = xy_binned[0, 0]
         sel[0] = True
-        for i in range(0, xy_binned.shape[0]):
+        for i in range(1, xy_binned.shape[0]):
             if xy_binned[i, 0] >= prevWork + work_spacing:
                 sel[i] = True
                 prevWork = xy_binned[i, 0]
@@ -1870,11 +1876,10 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
         dir_name = args.o
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
+        data_file = DataFile(r'\loadedtable', args.data_file,
+                             transpose=True) if hasattr(args, "data_file") else None
         for i, fig in enumerate(figures):
             print("Saving", fig.label)
-            data_file = DataFile(r'\loadedtable', args.data_file,
-                                 transpose=True) if hasattr(args, "data_file") else None
-
             tikz_save("{}/{}.tex".format(dir_name, fig.label), fig,
                       manual_legend=True,
                       show_info=False,
@@ -1882,8 +1887,8 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
                       figureheight=r'\figureheight',
                       figlabel=r'\figlabel',
                       data_file=data_file)
-            if data_file is not None:
-                data_file.write()
+        if data_file is not None:
+            data_file.write()
 
     if hasattr(args, "cmd"):
         os.system(args.cmd.format(args.o))

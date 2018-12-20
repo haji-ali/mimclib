@@ -242,11 +242,11 @@ class MIMCItrData(object):
         ret.bias = self.bias
         ret.stat_error = self.stat_error
         ret.total_time = self.total_time
+        ret.exact_error = self.exact_error
         ret.TOL = self.TOL
         ret.Q = copy.copy(self.Q)
         ret.weights = copy.copy(self.weights)
         ret.Vl_estimate = self.Vl_estimate.copy() if self.Vl_estimate is not None else None
-
         ret.active_lvls = self.active_lvls.copy()
         return ret
 
