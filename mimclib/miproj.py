@@ -425,7 +425,15 @@ class MIWProjSampler(object):
                 if self.direct:
                     coeffs = solve(G, R, sym_pos=True)
                 else:
-                    coeffs, info = gmres(G, R, tol=1e-12, atol='legacy')
+                    class gmres_counter(object):
+                        def __init__(self):
+                            self.niter = 0
+                        def __call__(self, rk=None):
+                            self.niter += 1
+
+                    coeffs, info = gmres(G, R, tol=1e-12,
+                                         atol='legacy',
+                                         callback=counter)
                     assert(info == 0)
                 projections = np.empty(sam_col.beta_count, dtype=TensorExpansion)
                 for j in range(0, sam_col.beta_count):
@@ -455,6 +463,7 @@ class MIWProjSampler(object):
                                    self.proj_sample_ratio * np.cumsum(totalN_per_beta) * np.cumsum(totalBasis_per_beta)
 
             self.user_data.append(Bunch(alpha=alpha,
+                                        gmres_counter=gmres_counter.niter,
                                         max_cond=max_cond,
                                         work_per_sample=work_per_sample,
                                         matrix_size=BW.shape,
