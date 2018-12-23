@@ -110,7 +110,7 @@ class TensorExpansion(object):
             X = X[None, None] # Scalar
         elif len(X.shape) == 1:
             X = X[:, None] # vector
-        return fnEvalBasis(self.base_indices, X).dot(self.coefficients)
+        return self.fnEvalBasis(self.base_indices, X).dot(self.coefficients)
 
     @staticmethod
     def evaluate_basis(fnBasis, base_indices, X):
@@ -211,7 +211,6 @@ class MIWProjSampler(object):
             B = self.basis_values
             C = fnEvalBasis(self.basis, X, prev_basis) if len(self.basis) > prev_basis else None
 
-            BV = fnEvalBasis(self.basis, X)
             if A is None:
                 self.basis_values = np.block([B, C])
             elif C is None:
@@ -219,12 +218,6 @@ class MIWProjSampler(object):
             else:
                 self.basis_values = np.block([[B, C[:prev_pts, :]],
                                               [A, C[prev_pts:, :]]])
-
-            from . import ipdb
-            ipdb.embed()
-
-            assert(np.sum(np.abs(BV - self.basis_values)) == 0)
-
             return self.basis_values
 
 
@@ -431,9 +424,10 @@ class MIWProjSampler(object):
                         def __call__(self, rk=None):
                             self.niter += 1
 
+                    gcounter = gmres_counter()
                     coeffs, info = gmres(G, R, tol=1e-12,
                                          atol='legacy',
-                                         callback=counter)
+                                         callback=gcounter)
                     assert(info == 0)
                 projections = np.empty(sam_col.beta_count, dtype=TensorExpansion)
                 for j in range(0, sam_col.beta_count):
@@ -463,7 +457,7 @@ class MIWProjSampler(object):
                                    self.proj_sample_ratio * np.cumsum(totalN_per_beta) * np.cumsum(totalBasis_per_beta)
 
             self.user_data.append(Bunch(alpha=alpha,
-                                        gmres_counter=gmres_counter.niter,
+                                        gmres_counter=gcounter.niter,
                                         max_cond=max_cond,
                                         work_per_sample=work_per_sample,
                                         matrix_size=BW.shape,
