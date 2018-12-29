@@ -11,7 +11,7 @@ import time
 warnings.filterwarnings("always")
 
 
-def l2_error_mc(itrs, fnSample, rel_tol=0.25, maxM=25000, max_L=None):
+def l2_error_mc(itrs, fnSample, rel_tol=0.1, maxM=25000, max_L=None):
     if len(itrs) == 0:
         return np.array([])
 

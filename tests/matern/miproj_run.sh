@@ -7,13 +7,11 @@ EXAMPLE="$2"
 if [ -z "$EXAMPLE" ]; then
     EXAMPLE='sf-kink'
 fi
-DBHOST="129.67.187.118" # Ultra-magnus
-DBHOST="129.67.184.182" # mimic
 
-DB_CONN="-db_engine mysql -db_name mimc -db_host ${DBHOST} -mimc_verbose 0 "
+DB_CONN="-db_engine mysql -db_name mimc -db_host mimic -mimc_verbose 0 "
 #DB_CONN='-db_engine sqlite -db_name miproj.sqlite -mimc_verbose 0 '
 #DB_CONN='-mimc_verbose 1 '
-BASETAG="postrev-$EXAMPLE-"
+BASETAG="rev-$EXAMPLE-"
 COMMON="-qoi_seed 0 -ksp_rtol 1e-15 -ksp_type gmres  $DB_CONN "
 EST_CMD="python miproj_esterr.py $COMMON "
 RUN_CMD="OPENBLAS_NUM_THREADS=1 python miproj_run.py -qoi_example $EXAMPLE \
