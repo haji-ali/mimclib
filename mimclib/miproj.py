@@ -8,6 +8,12 @@ import itertools
 import warnings
 import time
 from . import mimc
+from scipy.linalg import solve
+from scipy.sparse.linalg import lsmr, gmres, LinearOperator
+from itertools import count
+from collections import defaultdict
+from .mimc import Bunch
+from scipy.linalg import solve
 
 __all__ = []
 
@@ -18,7 +24,7 @@ def public(sym):
 import os
 import ctypes as ct
 import numpy.ctypeslib as npct
-__lib__ = npct.load_library("libset_util", __file__)
+__lib__ = setutil.__lib__ #npct.load_library("libset_util", __file__)
 __lib__.sample_optimal_leg_pts.restype = np.uint32
 __lib__.sample_optimal_leg_pts.argtypes = [npct.ndpointer(dtype=np.uint32, ndim=1, flags='CONTIGUOUS'),
                                            ct.c_uint32,
@@ -45,6 +51,78 @@ __lib__.evaluate_legendre_basis.argtypes = [ct.c_voidp,
                                                            ndim=1,
                                                            flags='CONTIGUOUS')]
 
+__lib__.max_deg.restype = None
+__lib__.max_deg.argtypes = [ct.c_voidp, ct.c_uint32,
+                            npct.ndpointer(dtype=setutil.ind_t,
+                                           ndim=1, flags='CONTIGUOUS')]
+
+__lib__.init_matvec.restype = ct.c_voidp
+__lib__.init_matvec.argtypes = [ct.c_voidp,
+                                ct.c_uint32,
+                                ct.c_uint32, ct.c_bool]
+
+
+__lib__.matvec_legendre_basis.restype = None
+__lib__.matvec_legendre_basis.argtypes = [ct.c_voidp,
+                                          npct.ndpointer(dtype=np.double,
+                                                         ndim=1, flags='CONTIGUOUS'),
+                                          npct.ndpointer(dtype=np.double,
+                                                         ndim=1, flags='CONTIGUOUS'),
+                                          ct.c_uint32,
+                                          ct.c_uint32,
+                                          ct.c_double,
+                                          ct.c_bool,
+                                          npct.ndpointer(dtype=np.double,
+                                                         ndim=1, flags='CONTIGUOUS')]
+
+__lib__.profile_matvec_legendre_basis.restype = None
+__lib__.profile_matvec_legendre_basis.argtypes = [ct.c_voidp,
+                                                  npct.ndpointer(dtype=np.double,
+                                                         ndim=1, flags='CONTIGUOUS'),
+                                                  npct.ndpointer(dtype=np.double,
+                                                                 ndim=1, flags='CONTIGUOUS'),
+                                                  ct.c_uint32,
+                                                  ct.c_uint32,
+                                                  ct.c_double,
+                                                  ct.c_bool,
+                                                  npct.ndpointer(dtype=np.double,
+                                                                 ndim=1, flags='CONTIGUOUS'),
+                                                  ct.c_uint32]
+
+
+class matvec:
+    def __init__(self, basis, X, densify=False):
+        self._handle = __lib__.init_matvec(basis._handle, X.shape[1], len(X), densify)
+        self.basis_count = len(basis)
+
+    def eval(self, X, v, exponent=1., transpose=False):
+        result = np.empty(self.basis_count if transpose else len(X))
+        assert(len(v) == (len(X) if transpose else self.basis_count))
+        X = np.array(X)
+        __lib__.matvec_legendre_basis(self._handle,
+                                      X.reshape(-1), np.array(v),
+                                      ct.c_uint32(X.shape[1]),
+                                      ct.c_uint32(len(X)), exponent,
+                                      transpose, result)
+        return result
+
+    def __del__(self):
+        if hasattr(self, "_handle") and self._handle is not None:
+            __lib__.free_matvec(self._handle)
+            self._handle = None
+
+    def profile(self, X, v, exponent=1., transpose=False, times=1):
+        result = np.empty(self.basis_count if transpose else len(X))
+        assert(len(v) == (len(X) if transpose else self.basis_count))
+        X = np.array(X)
+        __lib__.profile_matvec_legendre_basis(self._handle,
+                                              X.reshape(-1), np.array(v),
+                                              ct.c_uint32(X.shape[1]),
+                                              ct.c_uint32(len(X)), exponent,
+                                              transpose, result, times)
+        return result
+
+
 @public
 def evaluate_legendre_basis(basis_indices, X, basis_start=0,
                             basis_count=None):
@@ -57,6 +135,30 @@ def evaluate_legendre_basis(basis_indices, X, basis_start=0,
                                     X.reshape(-1),
                                     X.shape[1], len(X), val)
     return val.reshape(len(X), basis_count)
+
+@public
+def matvec_legendre_basis(basis_indices, X, v, exponent=1.,
+                          transpose=False,
+                          max_deg=None):
+    result = np.empty(len(basis_indices) if transpose else len(X))
+    assert(len(v) == (len(X) if transpose else len(basis_indices)))
+    X = np.array(X)
+    if max_deg is None:
+        max_deg = get_basis_max_deg(basis_indices)
+    __lib__.matvec_legendre_basis(basis_indices._handle, max_deg,
+                                  X.reshape(-1), np.array(v),
+                                  ct.c_uint32(X.shape[1]),
+                                  ct.c_uint32(len(X)), exponent,
+                                  transpose, result)
+    return result
+
+
+
+@public
+def get_basis_max_deg(basis_indices, dim):
+    max_deg = np.empty(dim, dtype=setutil.ind_t)
+    __lib__.max_deg(basis_indices._handle, dim, max_deg)
+    return max_deg
 
 @public
 def sample_optimal_leg_pts(N_per_basis, bases_indices, min_dim,
@@ -241,12 +343,14 @@ class MIWProjSampler(object):
                  fnBasisFromLvl=None,
                  fnWeightPoints=None,
                  fnWorkModel=None,
+                 fnGetProjector=None,
                  reuse_samples=False, proj_sample_ratio=0):
         self.fnEvalBasis = fnEvalBasis
         # Returns samples count of a projection index to ensure stability
         self.fnSamplesCount = fnSamplesCount if fnSamplesCount is not None else default_samples_count
         # Returns point sample and their weights
         self.fnSamplePoints = fnSamplePoints
+        self.fnGetProjector = fnGetProjector
         self.fnWeightPoints = fnWeightPoints
         self.fnBasisFromLvl = fnBasisFromLvl if fnBasisFromLvl is not None else default_basis_from_level
         self.d = d   # Spatial dimension
@@ -255,15 +359,13 @@ class MIWProjSampler(object):
         self.alpha_ind = np.zeros(0)
         self.fnWorkModel = fnWorkModel
 
-        from itertools import count
-        from collections import defaultdict
         self.alpha_dict = defaultdict(lambda c=count(0): next(c))
         self.lvls = None
 
         self.prev_samples = defaultdict(lambda: MIWProjSampler.SamplesCollection(self.min_dim))
         self.reuse_samples = reuse_samples
         self.proj_sample_ratio = proj_sample_ratio
-        self.direct = False
+        self.method = 'matvec' if self.fnGetProjector is not None else 'gmres'
         self.user_data = []
 
     def init_mimc_run(self, run):
@@ -311,9 +413,10 @@ class MIWProjSampler(object):
         psums_fine = np.empty((len(lvls), 1), dtype=TensorExpansion)
         total_time = np.zeros(len(lvls))
         total_work = np.zeros(len(lvls))
+        tol = 1e-7
+        max_cond = np.nan
 
         # Add previous times and works from previous iteration
-        from .mimc import Bunch
         timer = mimc.Timer(clock=time.time)
         for alpha, ind in self.alpha_dict.items():
             sampling_time = 0
@@ -343,7 +446,7 @@ class MIWProjSampler(object):
                                                       [sam_col.beta_count]*len(new_b)))
                 sam_col.beta_count += 1
 
-            if len(sam_col.basis) > 14000:
+            if len(sam_col.basis) > 100000:
                 raise MemoryError("Too many basis functions {}".format(len(sam_col.basis)))
 
             if not self.reuse_samples:
@@ -384,51 +487,81 @@ class MIWProjSampler(object):
                 pt_sampling_time = timer.toc()
 
             timer.tic()
-            # sam_col.basis_values.resize(len(sam_col.X), len(sam_col.basis))
-            # TODO: should only compute new basis_values
-            basis_values = sam_col.update_basis_values(self.fnEvalBasis)
 
-            W = self.fnWeightPoints(sam_col.X, basis_values)
-            assembly_time_1 = timer.toc()
-            timer.tic()
-            from scipy.linalg import solve
-            from scipy.sparse.linalg import gmres, LinearOperator
-            BW = np.sqrt(W)[:, None] * basis_values
-            BWT = BW.transpose()
-            if self.direct:
-                G = BWT.dot(BW)
+            if self.method == 'matvec':
+                B_matvec, B_rmatvec, W = self.fnGetProjector(sam_col.basis, sam_col.X)
+                matvec_time = Bunch(val=0, count=0, rval=0, rcount=0)
+                def matvec(v, o=matvec_time):
+                    global matvec_time
+                    tStart = time.time()
+                    ret = W * B_matvec(v)
+                    o.val += time.time()-tStart
+                    o.count += 1
+                    return ret
+
+                def rmatvec(v, o=matvec_time):
+                    tStart = time.time()
+                    ret =  B_rmatvec(W*v)
+                    o.rval += time.time()-tStart
+                    o.rcount += 1
+                    return ret
+
+                G = LinearOperator((len(sam_col.X), len(sam_col.basis)),
+                                   # matvec=lambda v: W * B_matvec(v),
+                                   # rmatvec=lambda v: B_rmatvec(W*v)
+                                   matvec=matvec, rmatvec=rmatvec)
+                assembly_time_1 = timer.toc()
             else:
-                G = LinearOperator((BW.shape[1], BW.shape[1]),
-                                   matvec=lambda v: np.dot(BWT, np.dot(BW, v)),
-                                   rmatvec=lambda v: np.dot(BW, np.dot(BWT, v)))
-            assembly_time_2 = timer.toc()
-
-            max_cond = np.nan
-            # # This following operation is only needed for diagnosis purposes
-            # try:
-            #     GFull = G if self.direct else BW.transpose().dot(BW)
-            #     max_cond = np.linalg.cond(GFull)
-            # except:
-            #     pass
-
-            timer.tic()
-            for i in range(0, len(sub_alphas)):
-                # Add each element separately
-                R = np.dot(basis_values.transpose(), (sam_col.Y[i] * W))
-                if self.direct:
-                    coeffs = solve(G, R, sym_pos=True)
+                basis_values = sam_col.update_basis_values(self.fnEvalBasis)
+                W = self.fnWeightPoints(sam_col.X, basis_values)
+                assembly_time_1 = timer.toc()
+                timer.tic()
+                BW = np.sqrt(W)[:, None] * basis_values
+                BWT = BW.transpose()
+                if self.method == 'direct':
+                    G = BWT.dot(BW)
                 else:
-                    class gmres_counter(object):
-                        def __init__(self):
-                            self.niter = 0
-                        def __call__(self, rk=None):
-                            self.niter += 1
+                    G = LinearOperator((BW.shape[1], BW.shape[1]),
+                                       matvec=lambda v: np.dot(BWT, np.dot(BW, v)),
+                                       rmatvec=lambda v: np.dot(BW, np.dot(BWT, v)))
+                assembly_time_2 = timer.toc()
+                max_cond = np.nan
+                # # This following operation is only needed for diagnosis purposes
+                # try:
+                #     GFull = G if self.direct else BW.transpose().dot(BW)
+                #     max_cond = np.linalg.cond(GFull)
+                # except:
+                #     pass
 
-                    gcounter = gmres_counter()
-                    coeffs, info = gmres(G, R, tol=1e-12,
-                                         atol='legacy',
-                                         callback=gcounter)
-                    assert(info == 0)
+            projection_time = 0
+            for i in range(0, len(sub_alphas)):
+                timer.tic()
+                # Add each element separately
+                if self.method == 'matvec':
+                    coeffs, *info = lsmr(G, W * sam_col.Y[i], atol=tol, btol=tol)
+                    solver_itr_count = info[1]
+                    if info[0] > 2:
+                        print("Info: ", info)
+                    # assert(info[0] <= 2)
+                    # assert(np.sum(np.abs(C_gmres - coeffs)) < tol)
+                else:
+                    R = np.dot(basis_values.transpose(), (sam_col.Y[i] * W))
+                    if self.method == 'direct':
+                        coeffs = solve(G, R, sym_pos=True)
+                    else:
+                        class gmres_counter(object):
+                            def __init__(self):
+                                self.niter = 0
+                            def __call__(self, rk=None):
+                                self.niter += 1
+
+                        gcounter = gmres_counter()
+                        coeffs, info = gmres(G, R, tol=tol, atol=tol,
+                                             callback=gcounter)
+                        solver_itr_count = gcounter.niter
+                        assert(info == 0)
+
+                projection_time += timer.toc()
                 projections = np.empty(sam_col.beta_count, dtype=TensorExpansion)
                 for j in range(0, sam_col.beta_count):
                     # if len(beta_indset[j]) == 0:
@@ -445,7 +578,7 @@ class MIWProjSampler(object):
                     psums_fine[sel_lvls, 0] = projections
                 else:
                     psums_delta[sel_lvls, 0] += projections*mods[i]
-            projection_time = timer.toc()
+
             # For now, only compute sampling time
             sam_col.sampling_time += sampling_time
             sam_col.pt_sampling_time = pt_sampling_time
@@ -456,11 +589,18 @@ class MIWProjSampler(object):
             total_work[sel_lvls] = work_per_sample * totalN_per_beta + \
                                    self.proj_sample_ratio * np.cumsum(totalN_per_beta) * np.cumsum(totalBasis_per_beta)
 
+            # print("Sampling: ", sampling_time, "Projection: ", projection_time,
+            #       "iteration count:", solver_itr_count,
+            #       "matvec time: {} over {}".format(matvec_time.val, matvec_time.count),
+            #       "rmatvec time: {} over {}".format(matvec_time.rval, matvec_time.rcount))
+            # if projection_time > 12:
+            #     raise Exception("Hello")
             self.user_data.append(Bunch(alpha=alpha,
-                                        gmres_counter=gcounter.niter,
+                                        gmres_counter=solver_itr_count,
                                         max_cond=max_cond,
                                         work_per_sample=work_per_sample,
-                                        matrix_size=BW.shape,
+                                        matrix_size=(len(sam_col.basis),
+                                                     len(sam_col.X)),
                                         todoN_per_beta=todoN_per_beta,
                                         sampling_time=sampling_time,
                                         pt_sampling_time=pt_sampling_time,
@@ -478,7 +618,6 @@ class MIWProjSampler(object):
         :param basisvalues: polynomial basis values
         :return: coefficients
         '''
-        from scipy.linalg import solve
         R = basisvalues.transpose().dot(Y * W)
         G = basisvalues.transpose().dot(basisvalues * W[:, None])
         cond = np.linalg.cond(G)

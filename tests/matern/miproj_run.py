@@ -11,6 +11,10 @@ from mimclib import setutil
 from mimclib import mimc, ipdb
 import argparse
 
+# from matern_fem import matern
+from matern import SField_Matern
+# from kl1D import kl1D
+
 warnings.filterwarnings("error")
 warnings.filterwarnings("always", category=mimclib.test.ArgumentWarning)
 warnings.filterwarnings("always", category=UserWarning)
@@ -37,12 +41,10 @@ class MyRun:
         return output
 
     def solveFor_kl1D(self, alpha, arrY):
-        from kl1D import kl1D
         assert(len(alpha) == 1)
         return kl1D(arrY, 2**alpha[0], self.params.qoi_df_nu + 0.5)[:, 0]
 
     def solveFor_matern(self, alpha, arrY):
-        from matern_fem import matern
         assert(len(alpha) == 1)
         return matern(arrY, 2**alpha[0],
                       nu=self.params.qoi_df_nu,
@@ -83,12 +85,33 @@ class MyRun:
         else:
             fnBasisFromLvl = lambda beta, d=self.params.miproj_max_vars: miproj.td_basis_from_level(d, beta)
 
+
+        def fnGetProjector_shared(basis, X):
+            matvec_data = miproj.matvec(basis, X, densify=True)
+            matvec = lambda v, d=matvec_data, x=X: \
+                                  matvec_data.eval(x, v)
+            rmatvec = lambda v, d=matvec_data, x=X: \
+                                   matvec_data.eval(x, v, transpose=True)
+            return matvec, rmatvec, matvec_data
+
         if run.params.miproj_pts_sampler == 'optimal':
             fnSamplePoints = miproj.sample_optimal_leg_pts
             fnWeightPoints = lambda x, b: miproj.optimal_weights(b)
+
+            def fnGetProjector(basis, X):
+                X = np.array(X)
+                matvec, rmatvec, matvec_data = fnGetProjector_shared(basis, X)
+                s = matvec_data.eval(X, np.ones(len(basis)), exponent=2.)
+                return matvec, rmatvec, len(basis) / s
+
         elif run.params.miproj_pts_sampler == 'arcsine':
             fnSamplePoints = miproj.sample_arcsine_pts
             fnWeightPoints = lambda x, b: miproj.arcsine_weights(x)
+
+            def fnGetProjector(basis, X):
+                X = np.array(X)
+                matvec, rmatvec, _ = fnGetProjector_shared(basis, X)
+                return matvec, rmatvec, miproj.arcsine_weights(X)
         else:
             raise NotImplementedError("Unknown points sampler")
 
@@ -111,10 +134,10 @@ class MyRun:
                                           fnSamplePoints=fnSamplePoints,
                                           fnWeightPoints=fnWeightPoints,
                                           fnWorkModel=fnWorkModel,
+                                          fnGetProjector=fnGetProjector,
                                           reuse_samples=run.params.miproj_reuse_samples)
         self.proj.init_mimc_run(run)
         if self.params.qoi_example.startswith('sf'):
-            from matern import SField_Matern
             SField_Matern.Init()
             self.sf = SField_Matern(run.params)
 
@@ -260,5 +283,26 @@ if __name__ == "__main__":
                                          fnInit=run.initRun,
                                          fnItrDone=run.ItrDone)
     if mirun.params.qoi_example.startswith('sf'):
-        from matern import SField_Matern
         SField_Matern.Final()
+
+def profile():
+    # Return basis functions from a TD set of d dimensions
+    times, b, d = 3, 5, 2
+    td_prof = setutil.TDFTProfCalculator(ft_w=np.ones(d))
+    basis = setutil.VarSizeList()
+    basis.expand_set(td_prof, d, max_prof=2**(b+1)-1)
+
+    pt_count = int(np.ceil(np.sum(miproj.default_samples_count(basis))))
+    X = np.random.uniform(low=-1, high=1, size=(pt_count, 2))
+    matvec_data = miproj.matvec(basis, X, densify=True)
+
+    v = np.random.uniform(low=-1, high=1, size=len(basis))
+
+    print("Basis count", len(basis), "Point count", len(X))
+
+    tStart = time.time()
+    for i in range(0, times):
+        matvec_data.eval(X, v)
+    print("Full Took: ", time.time() - tStart)
+
+    # matvec_data.profile(X, v, times=times)

@@ -276,6 +276,9 @@ typedef ProfitCalculator* PProfitCalculator;
 
 class VarSizeList {
 public:
+    typedef mul_ind_t value_type;
+    typedef const mul_ind_t& const_reference;
+
  VarSizeList(uint32 reserve=1) : m_max_dim(0) { m_ind_set.reserve(1); }
     VarSizeList(const VarSizeList &set,
                 ind_t d_start, ind_t d_end,
@@ -308,12 +311,16 @@ public:
     }
 
     const mul_ind_t& get(uint32 i) const {
-        assert(i<count());
+        assert(i<size());
         return m_ind_set[i];
     }
 
     ind_t get(uint32 i, ind_t j) const {
         return m_ind_set[i][j];
+    }
+
+    const mul_ind_t& operator[] (ind_t i) const {
+        return get(i);
     }
 
     bool find_ind(const mul_ind_t& cur, uint32 &index) const{
@@ -337,19 +344,19 @@ public:
         return find_ind(cur, index);
     }
 
-    inline size_t count() const {
+    inline size_t size() const {
         return m_ind_set.size();
     }
 
-    void all_dim(uint32 *dim, uint32 size) const{
-        assert(size >= count());
+    void all_dim(uint32 *dim, uint32 _size) const{
+        assert(_size >= size());
         uint32 i=0;
         for (auto itr=m_ind_set.begin();itr!=m_ind_set.end();itr++)
             dim[i++] = itr->size();
     }
 
-    void all_active_dim(uint32 *active_dim, uint32 size) const{
-        assert(size >= count());
+    void all_active_dim(uint32 *active_dim, uint32 _size) const{
+        assert(_size >= size());
         uint32 i=0;
         for (auto itr=m_ind_set.begin();itr!=m_ind_set.end();itr++)
             active_dim[i++] = itr->active();
@@ -415,8 +422,8 @@ public:
 #define DECLARE_ARR_ACCESSOR(NAME, TYPE) \
     void NAME(TYPE* out, size_t size) const;    \
     std::vector<TYPE> NAME() const {                                 \
-        std::vector<TYPE> ret = std::vector<TYPE>(this->count());    \
-        if (!this->count()) return ret; \
+        std::vector<TYPE> ret = std::vector<TYPE>(this->size());    \
+        if (!this->size()) return ret; \
         NAME(&ret[0], ret.size()); return ret; }
 
     DECLARE_ARR_ACCESSOR(count_neighbors, ind_t);
@@ -463,7 +470,7 @@ inline std::ostream& operator<< (std::ostream& out, const mul_ind_t& v) {
 }
 
 inline std::ostream& operator<< (std::ostream& out, const VarSizeList& v) {
-    for (uint32 i=0;i<v.count();i++)
+    for (uint32 i=0;i<v.size();i++)
         out << v.get(i) << std::endl;
     return out;
 }

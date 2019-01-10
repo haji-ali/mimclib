@@ -30,10 +30,10 @@ std::vector<uint32> argsort(const std::vector<T>& v) {
 
 void VarSizeList::check_admissibility(ind_t d_start, ind_t d_end,
                                      unsigned char *admissible, uint32 size) const{
-    assert(size >= this->count());
-    for (unsigned int i=0;i<this->count();i++)
+    assert(size >= this->size());
+    for (unsigned int i=0;i<this->size();i++)
         admissible[i]=true;
-    for (unsigned int i=0;i<this->count();i++){
+    for (unsigned int i=0;i<this->size();i++){
         mul_ind_t cur = this->get(i);
         for (unsigned int j=d_start;
              j<d_end && j<cur.size() && admissible[i];
@@ -73,10 +73,10 @@ static double get_min_profit(mul_ind_t cur, const VarSizeList& set,
 void VarSizeList::make_profits_admissible(ind_t d_start,
                                         ind_t d_end, double *pProfits,
                                         uint32 size) const {
-    assert(size >= this->count());
-    std::vector<bool> calc = std::vector<bool>(this->count(), false);
+    assert(size >= this->size());
+    std::vector<bool> calc = std::vector<bool>(this->size(), false);
     get_min_profit(mul_ind_t(), *this, calc, pProfits, d_start, d_end);
-    // for (unsigned int i=0;i<set.count();i++)
+    // for (unsigned int i=0;i<set.size();i++)
     //     get_min_profit(set.get(i), set, calc, pProfits, d_start, d_end);
     // Done!
 }
@@ -89,12 +89,12 @@ double VarSizeList::get_min_outer_profit(const PProfitCalculator profCalc,
     std::vector<ind_t> bnd_neigh = this->count_neighbors();
 
     //------------- Calculate outer boundary
-    if (!this->count())
+    if (!this->size())
         return profCalc->calc_log_prof(mul_ind_t());
 
     double minProf = std::numeric_limits<double>::infinity();
     unsigned int bnd_count = 0;
-    for (uint32 k=0;k<this->count();k++){
+    for (uint32 k=0;k<this->size();k++){
         if (bnd_neigh[k] < max_d) {
             // This is a boundary, check all outer indices that are
             // not in the set already
@@ -121,7 +121,7 @@ double VarSizeList::get_min_outer_profit(const PProfitCalculator profCalc,
 void VarSizeList::calc_set_profit(const PProfitCalculator profCalc,
                                     double *log_prof,
                                     uint32 size) const {
-    for (size_t i=0;i<this->count() && i < size;i++)
+    for (size_t i=0;i<this->size() && i < size;i++)
         log_prof[i] = profCalc->calc_log_prof(this->get(i));
 }
 
@@ -133,7 +133,7 @@ void VarSizeList::get_level_boundaries(const uint32 *levels,
     throw std::runtime_error("Must make it work with variables sets and also, the boundary of the axis is just the last element. Even if the axis is not covered!!!!!!!");
     /////// TODO: The following code does not work with variable size sets.
     const VarSizeList& set = *this;
-    std::vector<ind_t> bnd_neigh = std::vector<ind_t>(set.count(), 0);
+    std::vector<ind_t> bnd_neigh = std::vector<ind_t>(set.size(), 0);
     uint32 start = 0;
     ind_t max_d = set.max_dim();
     for (unsigned int i=0;i<levels_count;i++){
@@ -193,10 +193,10 @@ void VarSizeList::get_level_boundaries(const uint32 *levels,
 // }
 
 void VarSizeList::count_neighbors(ind_t* bnd_neigh, size_t size) const {
-    assert(size >= this->count());
-    for (uint32 k=0;k<this->count();k++) bnd_neigh[k]=0;
+    assert(size >= this->size());
+    for (uint32 k=0;k<this->size();k++) bnd_neigh[k]=0;
 
-    for (uint32 k=0;k<this->count();k++){
+    for (uint32 k=0;k<this->size();k++){
         // Update Neighbors
         auto cur = this->get(k);
         for (unsigned int j=0;j<cur.size();j++){
@@ -215,7 +215,7 @@ uint32 VarSizeList::add_admissible_children(mul_ind_t cur,
                                             uint32 max_add,
                                             VarSizeList &out) const{
     uint32 added = 0;
-    for (uint32 i=0;i<cur.size() && out.count() < max_add;i++){
+    for (uint32 i=0;i<cur.size() && out.size() < max_add;i++){
         cur.step(i, 1);
         if (!this->has_ind(cur) && this->is_ind_admissible(cur)
             && !out.has_ind(cur)){
@@ -288,7 +288,7 @@ VarSizeList VarSizeList::expand_set(const double *profits, uint32 count,
                                     uint32 max_added,
                                     ind_t seedLookahead) const {
     // Sorted ind lists the indices in order of expansion (of decreasing profit).
-    assert(count == this->count());
+    assert(count == this->size());
     // std::vector<double> profits(count);
     // for (size_t i=0;i<profits.size();i++)
     //     profits[i] = log(work[i]) - log(fabs(error[i]));
@@ -298,7 +298,7 @@ VarSizeList VarSizeList::expand_set(const double *profits, uint32 count,
     //------------- Calculate outer boundary
     ind_t max_dim = this->max_dim();
     VarSizeList new_indices;
-    for (uint32 j=0;j<count && new_indices.count() < max_added;j++) {
+    for (uint32 j=0;j<count && new_indices.size() < max_added;j++) {
         uint32 k = sorted_ind[j];   // Start from the least -log profit
         if (bnd_neigh[k] < max_dim) {
             // This is a boundary, check all outer indices that are
@@ -392,7 +392,7 @@ void VarSizeList::set_union(const VarSizeList& rhs,
         uint32 ind;
         if (!this->find_ind(*itr, ind)){
             this->push_back_unsafe(*itr);
-            ind = this->count()-1;
+            ind = this->size()-1;
         }
         if (new_index) new_index[i] = ind;
     }
@@ -414,9 +414,9 @@ void VarSizeList::get_adaptive_order(const double *profits,
     uint32 cur_order = 1;
     std::vector<double> profits_in_set;
     while (1){
-        size_t prev_count = curList.count();
+        size_t prev_count = curList.size();
         curList.set_union(curList.expand_set(&profits_in_set[0],
-                                             curList.count(),
+                                             curList.size(),
                                              max_added, seedLookahead), NULL);
         bool all_found = true;
         for (auto itr=curList.m_ind_set.begin()+prev_count;
@@ -437,8 +437,8 @@ void VarSizeList::get_adaptive_order(const double *profits,
 }
 
 void VarSizeList::check_errors(const double *errors, unsigned char* strange, uint32 count) const{
-    assert(count == this->count());
-    for (uint32 k=0;k<this->count();k++){
+    assert(count == this->size());
+    for (uint32 k=0;k<this->size();k++){
         // Update Neighbors
         strange[k] = false;
         if (errors[k] == 0)
@@ -461,7 +461,7 @@ void VarSizeList::is_parent_of_admissible(unsigned char* pout, size_t size) cons
     ind_t max_d = this->max_dim();
     std::vector<ind_t> bnd_neigh = this->count_neighbors();
     //------------- Calculate outer boundary
-    for (uint32 k=0;k<this->count();k++){
+    for (uint32 k=0;k<this->size();k++){
         pout[k] = false;
         if (bnd_neigh[k] < max_d) {
             // This is a boundary, check all outer indices that are not in the set already
@@ -482,12 +482,12 @@ double VarSizeList::estimate_bias(const double *err_contributions,
                                   uint32 count,
                                   const double *rates, uint32 rates_size) const {
     ind_t max_d = this->max_dim();
-    assert(count >= this->count() && rates_size >= max_d);
+    assert(count >= this->size() && rates_size >= max_d);
     std::vector<ind_t> bnd_neigh = this->count_neighbors();
 
     std::map<mul_ind_t, double> map_contrib;
     //------------- Calculate outer boundary
-    for (uint32 k=0;k<this->count();k++){
+    for (uint32 k=0;k<this->size();k++){
         if (bnd_neigh[k] < max_d) {
             // This is a boundary, check all outer indices that are
             // not in the set already
@@ -518,7 +518,7 @@ double VarSizeList::estimate_bias(const double *err_contributions,
 VarSizeList VarSizeList::reduce_set(const ind_t *keep_dim, ind_t keep_dim_count,
                                     uint32* out_indices,
                                     uint32 out_indices_count) const {
-    assert(out_indices_count >= count());
+    assert(out_indices_count >= size());
 
     VarSizeList new_list;
     for (auto itr=m_ind_set.begin();itr!=m_ind_set.end();itr++)
@@ -533,7 +533,7 @@ VarSizeList VarSizeList::reduce_set(const ind_t *keep_dim, ind_t keep_dim_count,
         }
         else{
             new_list.push_back(new_ind);
-            out_indices[itr-m_ind_set.begin()] = new_list.count()-1;
+            out_indices[itr-m_ind_set.begin()] = new_list.size()-1;
         }
     }
     return new_list;

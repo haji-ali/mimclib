@@ -294,12 +294,12 @@ void CalculateSetProfit(const PVarSizeList pset,
 
 void CheckAdmissibility(const PVarSizeList pset, ind_t d_start, ind_t d_end,
                         unsigned char *admissible){
-    pset->check_admissibility(d_start, d_end, admissible, pset->count());
+    pset->check_admissibility(d_start, d_end, admissible, pset->size());
 }
 
 void MakeProfitsAdmissible(const PVarSizeList pset, ind_t d_start, ind_t d_end,
                            double *pProfits){
-    pset->make_profits_admissible(d_start, d_end, pProfits, pset->count());
+    pset->make_profits_admissible(d_start, d_end, pProfits, pset->size());
 }
 
 PVarSizeList VarSizeList_expand_set_calc(const PVarSizeList pset,
@@ -346,7 +346,7 @@ ind_t VarSizeList_get(const PVarSizeList pset, uint32 i, ind_t* data,
 }
 
 uint32 VarSizeList_count(const PVarSizeList pset){
-    return pset->count();
+    return pset->size();
 }
 
 PVarSizeList VarSizeList_sublist(const PVarSizeList pset, ind_t d_start, ind_t d_end, uint32* idx, uint32 _count){

@@ -1,5 +1,5 @@
 TARGETS =  libset_util.so libset_util.a
-DEBUG = -O3
+DEBUG = -O3 -DNDEBUG
 # DEBUG = -pg
 # CCFLAGS += -g
 # CCPPFLAGS += -g
@@ -29,6 +29,9 @@ libset_util.a: set_util.o var_list.o
 
 libset_util.so: set_util.o var_list.o util.o
 	g++ ${DEBUG} -fPIC -Wall -std=c++11 -shared -Wl,-soname,$@ -o $@ $^
+
+libset_util.o: set_util.o var_list.o util.o
+	g++ ${DEBUG} -fPIC -Wall -std=c++11 -o $@ $^
 
 clean:
 	${RM} *.so *.a *.o
