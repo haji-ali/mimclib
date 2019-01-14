@@ -58,69 +58,39 @@ __lib__.max_deg.argtypes = [ct.c_voidp, ct.c_uint32,
 
 __lib__.init_matvec.restype = ct.c_voidp
 __lib__.init_matvec.argtypes = [ct.c_voidp,
-                                ct.c_uint32,
-                                ct.c_uint32, ct.c_bool]
+                                npct.ndpointer(dtype=np.double,
+                                               ndim=1, flags='CONTIGUOUS'),
+                                ct.c_uint32, ct.c_uint32, ct.c_bool]
 
 
 __lib__.matvec_legendre_basis.restype = None
 __lib__.matvec_legendre_basis.argtypes = [ct.c_voidp,
                                           npct.ndpointer(dtype=np.double,
                                                          ndim=1, flags='CONTIGUOUS'),
-                                          npct.ndpointer(dtype=np.double,
-                                                         ndim=1, flags='CONTIGUOUS'),
-                                          ct.c_uint32,
-                                          ct.c_uint32,
-                                          ct.c_double,
+                                          ct.c_bool,
                                           ct.c_bool,
                                           npct.ndpointer(dtype=np.double,
                                                          ndim=1, flags='CONTIGUOUS')]
 
-__lib__.profile_matvec_legendre_basis.restype = None
-__lib__.profile_matvec_legendre_basis.argtypes = [ct.c_voidp,
-                                                  npct.ndpointer(dtype=np.double,
-                                                         ndim=1, flags='CONTIGUOUS'),
-                                                  npct.ndpointer(dtype=np.double,
-                                                                 ndim=1, flags='CONTIGUOUS'),
-                                                  ct.c_uint32,
-                                                  ct.c_uint32,
-                                                  ct.c_double,
-                                                  ct.c_bool,
-                                                  npct.ndpointer(dtype=np.double,
-                                                                 ndim=1, flags='CONTIGUOUS'),
-                                                  ct.c_uint32]
-
 
 class matvec:
     def __init__(self, basis, X, densify=False):
-        self._handle = __lib__.init_matvec(basis._handle, X.shape[1], len(X), densify)
+        X = np.array(X)
+        self._handle = __lib__.init_matvec(basis._handle, X.reshape(-1),
+                                           X.shape[1], len(X), densify)
         self.basis_count = len(basis)
 
-    def eval(self, X, v, exponent=1., transpose=False):
+    def eval(self, v, square=False, transpose=False):
         result = np.empty(self.basis_count if transpose else len(X))
         assert(len(v) == (len(X) if transpose else self.basis_count))
-        X = np.array(X)
-        __lib__.matvec_legendre_basis(self._handle,
-                                      X.reshape(-1), np.array(v),
-                                      ct.c_uint32(X.shape[1]),
-                                      ct.c_uint32(len(X)), exponent,
-                                      transpose, result)
+        __lib__.matvec_legendre_basis(self._handle, np.array(v),
+                                      square, transpose, result)
         return result
 
     def __del__(self):
         if hasattr(self, "_handle") and self._handle is not None:
             __lib__.free_matvec(self._handle)
             self._handle = None
-
-    def profile(self, X, v, exponent=1., transpose=False, times=1):
-        result = np.empty(self.basis_count if transpose else len(X))
-        assert(len(v) == (len(X) if transpose else self.basis_count))
-        X = np.array(X)
-        __lib__.profile_matvec_legendre_basis(self._handle,
-                                              X.reshape(-1), np.array(v),
-                                              ct.c_uint32(X.shape[1]),
-                                              ct.c_uint32(len(X)), exponent,
-                                              transpose, result, times)
-        return result
 
 
 @public
@@ -490,21 +460,12 @@ class MIWProjSampler(object):
 
             if self.method == 'matvec':
                 B_matvec, B_rmatvec, W = self.fnGetProjector(sam_col.basis, sam_col.X)
-                matvec_time = Bunch(val=0, count=0, rval=0, rcount=0)
-                def matvec(v, o=matvec_time):
-                    global matvec_time
-                    tStart = time.time()
-                    ret = W * B_matvec(v)
-                    o.val += time.time()-tStart
-                    o.count += 1
-                    return ret
+                sqrtW = np.sqrt(W)
+                def matvec(v, fn=B_matvec, sW=sqrtW):
+                    return sW * fn(v)
 
-                def rmatvec(v, o=matvec_time):
-                    tStart = time.time()
-                    ret =  B_rmatvec(W*v)
-                    o.rval += time.time()-tStart
-                    o.rcount += 1
-                    return ret
+                def rmatvec(v, fn=B_rmatvec, sW=sqrtW):
+                    return fn(sW*v)
 
                 G = LinearOperator((len(sam_col.X), len(sam_col.basis)),
                                    # matvec=lambda v: W * B_matvec(v),

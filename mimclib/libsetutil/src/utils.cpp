@@ -163,6 +163,9 @@ extern "C" void max_deg(const VarSizeList* p_basis_list,
 
 template<typename T>
 class array2d {
+private:
+    array2d(const array2d& rhs);
+
 public:
     typedef T* value_type;
     typedef const T* const_reference;
@@ -224,6 +227,7 @@ public:
 };
 
 extern "C" matvec_data* init_matvec(const VarSizeList* p_basis_list,
+                                    const double* X,
                                     uint32 dim,
                                     uint32 pt_count,
                                     bool densify){
@@ -254,6 +258,12 @@ extern "C" matvec_data* init_matvec(const VarSizeList* p_basis_list,
 
     for (uint32 d=0;d<dim;d++)
         pdata->basis_values[d] = new double[pdata->max_deg[d]*pt_count];
+
+    for (uint32 j=0;j<pt_count;j++){
+        for (uint32 d=0;d<dim;d++)
+            legendre_pol(X[j*dim + d], pdata->max_deg[d], -1, 1,
+                         &(pdata->basis_values[d][ j*pdata->max_deg[d] ]));
+    }
     return pdata;
 }
 
@@ -261,33 +271,28 @@ extern "C" void free_matvec(matvec_data *pdata){
     delete pdata;
 }
 
-template<class T>
+template<bool square, bool transpose, class T>
 void matvec_legendre_basis(const T& basis_list,
                            const ind_t *max_deg,
-                           const double *X,  // pt_count x dim
                            const double *v,  // vector to multiply matrix by. Size: basis_count
                            uint32 dim,
                            uint32 pt_count,
-                           double exponent,
-                           bool transpose,
                            double** basis_values,
-                           double *result) // Output vector, Size: pt_count
+                           double *result)   // Output vector, Size: pt_count
 {
     uint32 basis_count = basis_list.size();
 
     std::fill(result, result + (transpose ? basis_count:pt_count), 0);
 
-    for (uint32 j=0;j<pt_count;j++){
-        for (uint32 d=0;d<dim;d++)
-            legendre_pol(X[j*dim + d], max_deg[d], -1, 1, &(basis_values[d][ j*max_deg[d] ]));
-        for (uint32 i=0; i<basis_count; i++){
+    for (uint64_t j=0;j<pt_count;j++){
+        for (uint64_t i=0; i<basis_count; i++){
             double tmp=1.;
             typename T::const_reference b = basis_list[i];
-            for (uint32 d=0;d<dim;d++)
+            for (uint64_t d=0;d<dim;d++)
                 tmp *= basis_values[d][j*max_deg[d] + b[d]];
 
-            if (exponent != 1.)
-                tmp = std::pow(tmp, exponent);
+            if (square)
+                tmp = std::pow(tmp, 2.0);
 
             if (transpose) result[i] += v[j]*tmp;
             else           result[j] += v[i]*tmp;
@@ -295,86 +300,61 @@ void matvec_legendre_basis(const T& basis_list,
     }
 }
 
+
+
+template< class T >
+void call_matvec_legendre_basis(bool square, bool transpose,
+                                const T& basis_list,
+                                const ind_t *max_deg,
+                                const double *v,  // vector to multiply matrix by. Size: basis_count
+                                uint32 dim,
+                                uint32 pt_count,
+                                double** basis_values,
+                                double *result){
+    if (square){
+        if (transpose)
+            matvec_legendre_basis<true, true>(basis_list, max_deg, v, dim,
+                                               pt_count, basis_values, result);
+        else
+            matvec_legendre_basis<true, false>(basis_list, max_deg, v, dim,
+                                               pt_count, basis_values, result);
+    }
+    else{
+        if (transpose)
+            matvec_legendre_basis<false, true>(basis_list, max_deg, v, dim,
+                                               pt_count, basis_values, result);
+        else
+            matvec_legendre_basis<false, false>(basis_list, max_deg, v, dim,
+                                                pt_count, basis_values, result);
+    }
+}
+
+
 extern "C" void matvec_legendre_basis(matvec_data* data,
-                                      const double *X,  // pt_count x dim
                                       const double *v,  // vector to multiply matrix by. Size: basis_count
-                                      uint32 dim,
-                                      uint32 pt_count,
-                                      double exponent,
+                                      bool square,
                                       bool transpose,
                                       double *result) // Output vector, Size: pt_count
 {
-    assert(dim == data->dim);
-    assert(pt_count == data->pt_count);
     if (data->dense_data.size() > 0){
-        matvec_legendre_basis(data->dense_data,
-                              data->max_deg, X, v,
-                              dim, pt_count,
-                              exponent, transpose,
-                              data->basis_values, result);
+        call_matvec_legendre_basis(square, transpose,
+                                   data->dense_data,
+                                   data->max_deg, v,
+                                   data->dim, data->pt_count,
+                                   data->basis_values, result);
     }
     else{
-        matvec_legendre_basis(*data->p_basis_list,
-                              data->max_deg, X, v,
-                              dim, pt_count,
-                              exponent, transpose,
-                              data->basis_values, result);
+        call_matvec_legendre_basis(square, transpose,
+                                   *data->p_basis_list,
+                                   data->max_deg, v,
+                                   data->dim, data->pt_count,
+                                   data->basis_values, result);
     }
 }
 
-
-#define CLOCK(title, task) {auto t_start = system_clock::now();         \
-        task;                                                           \
-        auto duration = duration_cast< milliseconds >(system_clock::now() - t_start).count()/1000.; \
-        std::cout << title <<  duration << std::endl;}
-
-
-
-extern "C" void profile_matvec_legendre_basis(const matvec_data* data,
-                                              const double *X,  // pt_count x dim
-                                              const double *v,  // vector to multiply matrix by. Size: basis_count
-                                              uint32 dim,
-                                              uint32 pt_count,
-                                              double exponent,
-                                              bool transpose,
-                                              double *result,
-                                              uint32 times){
-    using namespace std::chrono;
-    CLOCK("Pure-C took: ",
-          {for (uint32 i=0;i<times;i++)
-                  matvec_legendre_basis(*data->p_basis_list,
-                                        data->max_deg, X, v,
-                                        dim, pt_count,
-                                        exponent, transpose,
-                                        data->basis_values, result);}
-        );
-
-    const VarSizeList& basis_list = *data->p_basis_list;
-    typedef std::vector<ind_t> array;
-    std::vector<array> array_basis(basis_list.size());
-    for (uint32 i=0;i<basis_list.size();i++){
-        array_basis[i] = array(dim);
-        for (uint32 d=0;d<dim;d++)
-            array_basis[i][d] = basis_list[i][d];
-    }
-
-    CLOCK("Array took " << times << ": ",
-          {for (uint32 i=0;i<times;i++)
-                  matvec_legendre_basis(array_basis,
-                                        data->max_deg, X, v, dim,
-                                        pt_count, exponent, transpose,
-                                        data->basis_values,
-                                        result);}
-        );
-
-
-    CLOCK("Array (dim=2) took " << times << ": ",
-          {for (uint32 i=0;i<times;i++)
-                  matvec_legendre_basis(array_basis,
-                                        data->max_deg, X, v, 2,
-                                        pt_count, exponent, transpose,
-                                        data->basis_values,
-                                        result);}
-        );
-
-}
+/*
+#define CLOCK(title, task) {auto t_start = system_clock::now();       \
+         task;                                                           \
+         auto duration = duration_cast< milliseconds >(system_clock::now() - t_start).count()/1000.; \
+         std::cout << title <<  duration << std::endl;}
+*/
