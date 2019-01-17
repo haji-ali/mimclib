@@ -73,19 +73,43 @@ __lib__.matvec_legendre_basis.argtypes = [ct.c_voidp,
                                                          ndim=1, flags='CONTIGUOUS')]
 
 
+__lib__.assemble_projection_matrix.restype = None
+__lib__.assemble_projection_matrix.argtypes = [ct.c_voidp,
+                                               npct.ndpointer(dtype=np.double,
+                                                              ndim=1,
+                                                              flags='CONTIGUOUS'),
+                                               npct.ndpointer(dtype=np.double,
+                                                              ndim=1,
+                                                              flags='CONTIGUOUS')]
+
+
+
 class matvec:
-    def __init__(self, basis, X, densify=False):
+    def __init__(self, basis, X, matfill=True):
         X = np.array(X)
         self._handle = __lib__.init_matvec(basis._handle, X.reshape(-1),
-                                           X.shape[1], len(X), densify)
+                                           X.shape[1], len(X), not matfill)
         self.basis_count = len(basis)
+        self.pt_count = len(X)
+        self.matfill = matfill
+        if self.matfill:
+            self.B = np.empty(self.basis_count*self.pt_count)
+            __lib__.assemble_projection_matrix(self._handle, X.reshape(-1), self.B)
+            self.B = self.B.reshape((self.pt_count, self.basis_count))
+            self.eval = self.eval_matfill
+        else:
+            self.eval = self.eval_matvec
 
-    def eval(self, v, square=False, transpose=False):
-        result = np.empty(self.basis_count if transpose else len(X))
-        assert(len(v) == (len(X) if transpose else self.basis_count))
+    def eval_matvec(self, v, square=False, transpose=False):
+        result = np.empty(self.basis_count if transpose else self.pt_count)
+        assert(len(v) == (self.pt_count if transpose else self.basis_count))
         __lib__.matvec_legendre_basis(self._handle, np.array(v),
                                       square, transpose, result)
         return result
+
+    def eval_matfill(self, v, square=False, transpose=False):
+        B = self.B.transpose() if transpose else self.B
+        return np.dot(B**2 if square else B, v)
 
     def __del__(self):
         if hasattr(self, "_handle") and self._handle is not None:
@@ -335,11 +359,11 @@ class MIWProjSampler(object):
         self.prev_samples = defaultdict(lambda: MIWProjSampler.SamplesCollection(self.min_dim))
         self.reuse_samples = reuse_samples
         self.proj_sample_ratio = proj_sample_ratio
-        self.method = 'matvec' if self.fnGetProjector is not None else 'gmres'
+        self.method = 'gmres'
         self.user_data = []
 
     def init_mimc_run(self, run):
-        run.params.M0 = np.array([1])
+        run.params.M0 = np.array([0])
         run.params.reuse_samples = False
         run.params.lsq_est = False
         run.params.moments = 1
@@ -416,7 +440,7 @@ class MIWProjSampler(object):
                                                       [sam_col.beta_count]*len(new_b)))
                 sam_col.beta_count += 1
 
-            if len(sam_col.basis) > 100000:
+            if len(sam_col.basis) > 30000:
                 raise MemoryError("Too many basis functions {}".format(len(sam_col.basis)))
 
             if not self.reuse_samples:
@@ -445,84 +469,91 @@ class MIWProjSampler(object):
                 totalBasis_per_beta[i] = np.sum(sam_col.pols_to_beta == i)
 
             if np.sum(N_todo) > 0:
+                #print("Sampling points", np.sum(N_todo))
                 X, N_done = self.fnSamplePoints(N_todo, sam_col.basis, sam_col.min_dim)
                 N_done[:len(sam_col.N_per_basis)] += sam_col.N_per_basis
                 sam_col.N_per_basis = N_done
                 pt_sampling_time = timer.toc()
+                #print("Sampling points, took", pt_sampling_time)
 
+                #print("computing samples", len(X))
                 timer.tic()
                 sam_col.add_points(fnSample, sub_alphas, X)
                 sampling_time = timer.toc()
+                #print("computing samples, took", sampling_time)
             else:
                 pt_sampling_time = timer.toc()
 
+            #print("Assembling: ", len(sam_col.basis), len(sam_col.X))
+            #print("Took: ", assembly_time_1)
+
+            timer.tic()
+            B_matvec, B_rmatvec, W = self.fnGetProjector(sam_col.basis, sam_col.X)
+            sqrtW = np.sqrt(W)
+            assembly_time_1 = timer.toc()
             timer.tic()
 
-            if self.method == 'matvec':
-                B_matvec, B_rmatvec, W = self.fnGetProjector(sam_col.basis, sam_col.X)
-                sqrtW = np.sqrt(W)
-                def matvec(v, fn=B_matvec, sW=sqrtW):
-                    return sW * fn(v)
+            # timer.tic()
+            # B = sam_col.update_basis_values(self.fnEvalBasis)
+            # old_assembly_time_1 = timer.toc()
+            # print("Old", old_assembly_time_1, "New", assembly_time_1)
+            # W = self.fnWeightPoints(sam_col.X, B)
+            # sqrtW = np.sqrt(W)
+            # def B_matvec(v, B=B):
+            #     return np.dot(B, v)
+            # def B_rmatvec(v, BT=B.tranpose()):
+            #     return np.dot(BT, v)
 
+            if self.method == 'lsmr':
+                def matvec(v, fn=B_matvec, sW=sqrtW):
+                    return sW*fn(v)
                 def rmatvec(v, fn=B_rmatvec, sW=sqrtW):
                     return fn(sW*v)
-
                 G = LinearOperator((len(sam_col.X), len(sam_col.basis)),
-                                   # matvec=lambda v: W * B_matvec(v),
-                                   # rmatvec=lambda v: B_rmatvec(W*v)
                                    matvec=matvec, rmatvec=rmatvec)
-                assembly_time_1 = timer.toc()
-            else:
-                basis_values = sam_col.update_basis_values(self.fnEvalBasis)
-                W = self.fnWeightPoints(sam_col.X, basis_values)
-                assembly_time_1 = timer.toc()
-                timer.tic()
-                BW = np.sqrt(W)[:, None] * basis_values
-                BWT = BW.transpose()
-                if self.method == 'direct':
-                    G = BWT.dot(BW)
-                else:
-                    G = LinearOperator((BW.shape[1], BW.shape[1]),
-                                       matvec=lambda v: np.dot(BWT, np.dot(BW, v)),
-                                       rmatvec=lambda v: np.dot(BW, np.dot(BWT, v)))
-                assembly_time_2 = timer.toc()
-                max_cond = np.nan
-                # # This following operation is only needed for diagnosis purposes
-                # try:
-                #     GFull = G if self.direct else BW.transpose().dot(BW)
-                #     max_cond = np.linalg.cond(GFull)
-                # except:
-                #     pass
+            elif self.method == 'gmres':
+                def matvec(v, fn=B_matvec, fnr=B_rmatvec, WW=W):
+                    return fnr(WW*fn(v))
+                def rmatvec(v, fn=B_rmatvec, fnr=B_rmatvec, sW=sqrtW):
+                    return sW*fn(fnr(sW*v))
+                G = LinearOperator((len(sam_col.basis), len(sam_col.basis)),
+                                   matvec=matvec, rmatvec=rmatvec)
+
+            assembly_time_2 = timer.toc()
+            max_cond = np.nan
+            # # This following operation is only needed for diagnosis purposes
+            # try:
+            #     GFull = G if self.direct else BW.transpose().dot(BW)
+            #     max_cond = np.linalg.cond(GFull)
+            # except:
+            #     pass
 
             projection_time = 0
             for i in range(0, len(sub_alphas)):
                 timer.tic()
                 # Add each element separately
-                if self.method == 'matvec':
-                    coeffs, *info = lsmr(G, W * sam_col.Y[i], atol=tol, btol=tol)
+                if self.method == 'lsmr':
+                    coeffs, *info = lsmr(G, sqrtW * sam_col.Y[i], atol=tol, btol=tol)
                     solver_itr_count = info[1]
-                    if info[0] > 2:
-                        print("Info: ", info)
-                    # assert(info[0] <= 2)
-                    # assert(np.sum(np.abs(C_gmres - coeffs)) < tol)
+                elif self.method == 'gmres':
+                    class gmres_counter(object):
+                        def __init__(self):
+                            self.niter = 0
+                        def __call__(self, rk=None):
+                            self.niter += 1
+
+                    gcounter = gmres_counter()
+                    coeffs, info = gmres(G, B_rmatvec(sam_col.Y[i] * W),
+                                         tol=tol, atol=tol,
+                                         callback=gcounter)
+                    solver_itr_count = gcounter.niter
+                    assert(info == 0)
                 else:
-                    R = np.dot(basis_values.transpose(), (sam_col.Y[i] * W))
-                    if self.method == 'direct':
-                        coeffs = solve(G, R, sym_pos=True)
-                    else:
-                        class gmres_counter(object):
-                            def __init__(self):
-                                self.niter = 0
-                            def __call__(self, rk=None):
-                                self.niter += 1
-
-                        gcounter = gmres_counter()
-                        coeffs, info = gmres(G, R, tol=tol, atol=tol,
-                                             callback=gcounter)
-                        solver_itr_count = gcounter.niter
-                        assert(info == 0)
-
+                    coeffs = solve(G, B_rmatvec(sam_col.Y[i] * W),
+                                   sym_pos=True)
                 projection_time += timer.toc()
+
+                # print("Done Projecting")
                 projections = np.empty(sam_col.beta_count, dtype=TensorExpansion)
                 for j in range(0, sam_col.beta_count):
                     # if len(beta_indset[j]) == 0:
@@ -550,10 +581,11 @@ class MIWProjSampler(object):
             total_work[sel_lvls] = work_per_sample * totalN_per_beta + \
                                    self.proj_sample_ratio * np.cumsum(totalN_per_beta) * np.cumsum(totalBasis_per_beta)
 
-            # print("Sampling: ", sampling_time, "Projection: ", projection_time,
+            # print("Sampling: ", sampling_time,
+            #       "Assembly: ", assembly_time_1+assembly_time_2,
+            #       "Projection: ", projection_time,
             #       "iteration count:", solver_itr_count,
-            #       "matvec time: {} over {}".format(matvec_time.val, matvec_time.count),
-            #       "rmatvec time: {} over {}".format(matvec_time.rval, matvec_time.rcount))
+            #       "mat_vec", matvec_timer.val_time, "/" , matvec_timer.val_count)
             # if projection_time > 12:
             #     raise Exception("Hello")
             self.user_data.append(Bunch(alpha=alpha,

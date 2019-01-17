@@ -108,8 +108,6 @@ class FunctionLine2D(plt.Line2D):
         log_data = kwargs.pop('log_data', True)
         if data is not None:
             self.set_data(data, log_data)
-
-        self.tikz_function = "TIKZCODE"   # HACK: This should be done somewhere else
         super(FunctionLine2D, self).__init__([], [], *args, **kwargs)
 
     def _linspace(self, lim, scale, N=100):
@@ -124,11 +122,17 @@ class FunctionLine2D(plt.Line2D):
         if len(x) > 0 and len(y) > 0:
             if log_data:
                 consts = [np.mean(y/self.orig_fn(x)), 0]
-                #consts = ratefit(self.orig_fn(x), y)
+                self.const = consts[0]
             else:
                 consts = [1., np.mean(y-self.orig_fn(x))]
+                self.const = consts[1]
             self.fn = lambda x, cc=consts, ff=self.orig_fn: cc[0] * ff(x) + cc[1]
 
+    @property
+    def tikz_function(self):
+        if hasattr(self, "const") and self.const is not None:
+            return "TIKZCODE, {:g}".format(self.const)   # HACK: This should be done somewhere else
+        return "TIKZCODE"
 
     def draw(self, renderer):
         ax = self.axes
@@ -165,8 +169,10 @@ class FunctionLine2D(plt.Line2D):
         def fnExp(x, r=rate, cc=const):
             with np.errstate(divide='ignore', invalid='ignore'):
                 return cc*np.array(x)**r;
-        return FunctionLine2D(*args, fn=fnExp, data=data,
-                              log_data=log_data, **kwargs)
+        ret = FunctionLine2D(*args, fn=fnExp, data=data,
+                             log_data=log_data, **kwargs)
+        ret.const = const
+        return ret
 
 
 class StepFunction(object):
@@ -1774,6 +1780,8 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
                             help="Database User", dest='db.user')
         parser.add_argument("-db_host", type=str, action="store",
                             help="Database Host", dest='db.host')
+        parser.add_argument("-db_password", type=str, action="store",
+                            help="Database password", dest='db.password')
         parser.add_argument("-db_tag", type=str, action="store",
                             nargs='+', help="Database Tags")
         parser.add_argument("-label_fmt", type=str, action="store",

@@ -1113,9 +1113,10 @@ max_lvl        = {}
                     self._update_active_lvls()
                     # TODO: We might not need newTodoM is some of the
                     # levels are inactive. This is needed for MIMC, not MLMC
-                    if not self.params.reuse_samples:
-                        self.last_itr.zero_samples()
-                    samples_added = self._genSamples(newTodoM) or samples_added
+                    if self.params.M0 > 0:
+                        if not self.params.reuse_samples:
+                            self.last_itr.zero_samples()
+                        samples_added = self._genSamples(newTodoM) or samples_added
 
                 self.Q.theta = self._calcTheta(TOL, self.bias)
                 self._check_levels()
@@ -1126,6 +1127,7 @@ max_lvl        = {}
                                      self.last_itr.active_lvls,
                                      Ca=self._Ca,
                                      use_rmse=self.use_rmse)
+
                 self.print_debug("theta", self.Q.theta)
                 self.print_debug("Wl: ", self.Wl_estimate)
                 self.print_debug("Vl: ", self.Vl_estimate)
@@ -1134,7 +1136,6 @@ max_lvl        = {}
                 if not self.params.reuse_samples:
                     self.last_itr.zero_samples()
                 samples_added = self._genSamples(todoM) or samples_added
-
                 self.last_itr.total_time = timer.toc()
                 self.output(verbose=self.params.verbose)
                 self.print_info("------------------------------------------------")

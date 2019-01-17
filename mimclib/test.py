@@ -161,6 +161,8 @@ def run_errors_est_program(fnExactErr=None):
                             help="Database User", dest="db.user")
         parser.add_argument("-db_host", type=str, action="store",
                             help="Database Host", dest="db.host")
+        parser.add_argument("-db_password", type=str, action="store",
+                            help="Database Password", dest="db.password")
         parser.add_argument("-db_tag", type=str, action="store",
                             help="Database Tags")
         parser.add_argument("-qoi_exact_tag", type=str, action="store")

@@ -161,6 +161,34 @@ extern "C" void max_deg(const VarSizeList* p_basis_list,
     }
 }
 
+template<typename T, int dim> class ndarray;
+
+template<typename T> class ndarray<T, 2>
+{
+public:
+    static const uint32 dim=2;
+    T* data;
+    const uint32 I, J;
+
+    ndarray(T* _data, uint32 _I, uint32 _J) : data(_data), I(_I), J(_J){}
+
+    T& operator()(uint32 i, uint32 j){ return data[i*J+j];}
+    const T& operator()(uint32 i, uint32 j) const { return data[i*J+j];}
+};
+
+template<typename T> class ndarray<T, 3>
+{
+public:
+    static const uint32 dim=3;
+    T* data;
+    const uint32 I, J, K;
+
+    ndarray(T* _data, uint32 _I, uint32 _J, uint32 _K) : data(_data), I(_I), J(_J), K(_K) {}
+
+    T& operator()(uint32 i, uint32 j, uint32 k) {return data[(i*J + j)*K + k];}
+    const T& operator()(uint32 i, uint32 j, uint32 k) const { return data[(i*J + j)*K + k]; }
+};
+
 template<typename T>
 class array2d {
 private:
@@ -208,61 +236,72 @@ public:
 class matvec_data {
 public:
     const VarSizeList* p_basis_list;
-    ind_t *max_deg;
-    double** basis_values;
+    ind_t max_deg;
+    double* basis_values;
     uint32 dim;
     uint32 pt_count;
     array2d<ind_t> dense_data;
-    matvec_data(uint32 _dim) : dim(_dim){
-        max_deg = new ind_t[dim];
-        basis_values = new double*[dim];
+    matvec_data(uint32 _dim) : p_basis_list(NULL), max_deg(1),
+                               basis_values(NULL), dim(_dim), pt_count(0){
     }
 
     ~matvec_data(){
-        delete [] max_deg;
-        for (uint32 d=0;d<dim;d++)
-            delete [] basis_values[d];
         delete [] basis_values;
     }
 };
 
 extern "C" matvec_data* init_matvec(const VarSizeList* p_basis_list,
-                                    const double* X,
+                                    const double* _X,
                                     uint32 dim,
                                     uint32 pt_count,
                                     bool densify){
     matvec_data *pdata = new matvec_data(dim);
     pdata->pt_count = pt_count;
+    pdata->p_basis_list = p_basis_list;
 
+    const VarSizeList& basis_list = *p_basis_list;
     if (densify){
-        pdata->p_basis_list = NULL;
-        const VarSizeList& basis_list = *p_basis_list;
         pdata->dense_data = array2d<ind_t>(basis_list.size(), dim);
 
-        std::fill(pdata->max_deg, pdata->max_deg+dim, 1);
         ind_t *data = pdata->dense_data[0];
         uint32 j=0;
         for (uint32 i=0;i<basis_list.size();i++){
             for (uint32 d=0;d<dim;d++){
                 ind_t val = basis_list[i][d];
                 data[j++] = val;
-                pdata->max_deg[d] = std::max(pdata->max_deg[d],
-                                             static_cast<ind_t>(val + 1));
+                pdata->max_deg = std::max(pdata->max_deg,
+                                          static_cast<ind_t>(val + 1));
+            }
+        }
+
+        pdata->basis_values = new double[pdata->dim *   // This in order of speed of change
+                                         pdata->max_deg *
+                                         pdata->pt_count];
+
+        ndarray<double, 3> basis_values(pdata->basis_values,
+                                        pdata->pt_count,
+                                        pdata->max_deg,
+                                        pdata->dim);
+        ndarray<const double, 2> X(_X, pdata->pt_count, pdata->dim);
+
+        for (uint64_t j=0;j<pt_count;j++){
+            for (uint64_t d=0;d<dim;d++){
+                std::vector<double> vals(pdata->max_deg);
+                legendre_pol(X(j, d), pdata->max_deg, -1, 1, &vals[0]);
+
+                for (int i=0;i<pdata->max_deg;i++)
+                    basis_values(j, i, d) = vals[i];
             }
         }
     }
     else{
-        pdata->p_basis_list = p_basis_list;
-        max_deg(p_basis_list, dim, pdata->max_deg);
-    }
-
-    for (uint32 d=0;d<dim;d++)
-        pdata->basis_values[d] = new double[pdata->max_deg[d]*pt_count];
-
-    for (uint32 j=0;j<pt_count;j++){
-        for (uint32 d=0;d<dim;d++)
-            legendre_pol(X[j*dim + d], pdata->max_deg[d], -1, 1,
-                         &(pdata->basis_values[d][ j*pdata->max_deg[d] ]));
+        for (uint32 i=0;i<basis_list.size();i++){
+            for (uint32 d=0;d<dim;d++){
+                ind_t val = basis_list[i][d];
+                pdata->max_deg = std::max(pdata->max_deg,
+                                          static_cast<ind_t>(val + 1));
+            }
+        }
     }
     return pdata;
 }
@@ -273,23 +312,24 @@ extern "C" void free_matvec(matvec_data *pdata){
 
 template<bool square, bool transpose, class T>
 void matvec_legendre_basis(const T& basis_list,
-                           const ind_t *max_deg,
+                           ind_t max_deg,
                            const double *v,  // vector to multiply matrix by. Size: basis_count
                            uint32 dim,
                            uint32 pt_count,
-                           double** basis_values,
+                           double* _basis_values,
                            double *result)   // Output vector, Size: pt_count
 {
     uint32 basis_count = basis_list.size();
 
     std::fill(result, result + (transpose ? basis_count:pt_count), 0);
+    ndarray<double, 3> basis_values(_basis_values, pt_count, max_deg, dim);
 
     for (uint64_t j=0;j<pt_count;j++){
         for (uint64_t i=0; i<basis_count; i++){
             double tmp=1.;
             typename T::const_reference b = basis_list[i];
             for (uint64_t d=0;d<dim;d++)
-                tmp *= basis_values[d][j*max_deg[d] + b[d]];
+                tmp *= basis_values(j, b[d], d);
 
             if (square)
                 tmp = std::pow(tmp, 2.0);
@@ -305,11 +345,11 @@ void matvec_legendre_basis(const T& basis_list,
 template< class T >
 void call_matvec_legendre_basis(bool square, bool transpose,
                                 const T& basis_list,
-                                const ind_t *max_deg,
+                                ind_t max_deg,
                                 const double *v,  // vector to multiply matrix by. Size: basis_count
                                 uint32 dim,
                                 uint32 pt_count,
-                                double** basis_values,
+                                double* basis_values,
                                 double *result){
     if (square){
         if (transpose)
@@ -336,22 +376,43 @@ extern "C" void matvec_legendre_basis(matvec_data* data,
                                       bool transpose,
                                       double *result) // Output vector, Size: pt_count
 {
-    if (data->dense_data.size() > 0){
-        call_matvec_legendre_basis(square, transpose,
-                                   data->dense_data,
-                                   data->max_deg, v,
-                                   data->dim, data->pt_count,
-                                   data->basis_values, result);
-    }
-    else{
-        call_matvec_legendre_basis(square, transpose,
-                                   *data->p_basis_list,
-                                   data->max_deg, v,
-                                   data->dim, data->pt_count,
-                                   data->basis_values, result);
-    }
+    assert(data->dense_data.size() > 0);
+    call_matvec_legendre_basis(square, transpose,
+                               data->dense_data,
+                               data->max_deg, v,
+                               data->dim, data->pt_count,
+                               data->basis_values, result);
 }
 
+extern "C" void assemble_projection_matrix(matvec_data* data, double *_X, double* _result) {
+    const VarSizeList& basis_list = *data->p_basis_list;
+    const uint32 pt_count = data->pt_count;
+    const uint32 basis_count = basis_list.size();
+    const ind_t max_deg = data->max_deg;
+    const ind_t dim = data->dim;
+
+    ndarray<double, 2> out(_result, pt_count, basis_count);
+
+    ndarray<const double, 2> X(_X, pt_count, dim);
+
+    std::vector<double> basis_values(dim*max_deg);
+
+    for (uint64_t j=0;j<pt_count;j++) {
+        for (uint64_t d=0;d<dim;d++){
+            legendre_pol(X(j, d), max_deg, -1, 1,
+                         &basis_values[d * max_deg]);
+        }
+
+        for (uint64_t i=0; i<basis_count; i++){
+            typename VarSizeList::const_reference b = basis_list[i];
+
+            double tmp=1.;
+            for (uint64_t d=0;d<dim;d++)
+                tmp *= basis_values[d*max_deg + b[d]];
+            out(j,i) = tmp;
+        }
+    }
+}
 /*
 #define CLOCK(title, task) {auto t_start = system_clock::now();       \
          task;                                                           \
