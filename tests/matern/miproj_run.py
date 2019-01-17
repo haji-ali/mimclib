@@ -86,12 +86,10 @@ class MyRun:
             fnBasisFromLvl = lambda beta, d=self.params.miproj_max_vars: miproj.td_basis_from_level(d, beta)
 
 
-        def fnGetProjector_shared(basis, X):
-            matvec_data = miproj.matvec(basis, X, densify=True)
-            matvec = lambda v, d=matvec_data, x=X: \
-                                  matvec_data.eval(x, v)
-            rmatvec = lambda v, d=matvec_data, x=X: \
-                                   matvec_data.eval(x, v, transpose=True)
+        def fnGetProjector_shared(basis, X, matfill=self.params.miproj_matfill):
+            matvec_data = miproj.matvec(basis, X, matfill=matfill)
+            matvec = lambda v, d=matvec_data: d.eval(v)
+            rmatvec = lambda v, d=matvec_data: d.eval(v, transpose=True)
             return matvec, rmatvec, matvec_data
 
         if run.params.miproj_pts_sampler == 'optimal':
@@ -99,9 +97,8 @@ class MyRun:
             fnWeightPoints = lambda x, b: miproj.optimal_weights(b)
 
             def fnGetProjector(basis, X):
-                X = np.array(X)
                 matvec, rmatvec, matvec_data = fnGetProjector_shared(basis, X)
-                s = matvec_data.eval(X, np.ones(len(basis)), exponent=2.)
+                s = matvec_data.eval(np.ones(len(basis)), square=True)
                 return matvec, rmatvec, len(basis) / s
 
         elif run.params.miproj_pts_sampler == 'arcsine':
@@ -109,7 +106,6 @@ class MyRun:
             fnWeightPoints = lambda x, b: miproj.arcsine_weights(x)
 
             def fnGetProjector(basis, X):
-                X = np.array(X)
                 matvec, rmatvec, _ = fnGetProjector_shared(basis, X)
                 return matvec, rmatvec, miproj.arcsine_weights(X)
         else:
@@ -264,6 +260,7 @@ class MyRun:
         migrp.add_argument(pre + "max_vars", type=int, default=10**6, action="store")
         migrp.add_argument(pre + "max_lvl", type=int, default=1000, action="store")
         migrp.add_argument(pre + "time", default=False, action="store_true")
+        migrp.add_argument(pre + "matfill", default=False, action="store_true")
 
     def ItrDone(self, db, run_id, run):
         if db is not None:

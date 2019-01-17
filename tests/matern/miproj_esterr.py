@@ -57,8 +57,9 @@ def l2_error_mc(itrs, fnSample, rel_tol=0.1, maxM=25000, max_L=None):
         s2 += np.sum(errors**2, axis=0)
         s1_E += np.sum(samples)
         s2_E += np.sum(samples**2)
-
         M += len(samples)
+
+        errs_est = np.sqrt(s1/M)
         err = 3*np.sqrt((s2/M - (s1/M)**2)/M)    # Approximate error of error estimate
         max_rel_err = np.max(err / (np.abs(s1/M)))
         print("Estimate with", M, "samples -> max relative error: ", max_rel_err,
@@ -66,8 +67,13 @@ def l2_error_mc(itrs, fnSample, rel_tol=0.1, maxM=25000, max_L=None):
         print("Expectation:", s1_E/M, ", Error:", 3*np.sqrt((s2_E/M - (s1_E/M)**2)/M))
         if max_rel_err < rel_tol:
             break
+
+        # for i, itr in enumerate(itrs):
+        #     itr.exact_error = errs_est[i]
+        ##### Save in database
+
         nextM *= 2
-    return np.sqrt(s1/M)
+    return errs_est
 
 if __name__ == "__main__":
     import miproj_run

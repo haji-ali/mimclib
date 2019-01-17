@@ -410,7 +410,7 @@ def lower_envelope(x, cmp=lambda x,y: y<x):
     return ret
 
 def to_single_run(runs, fnFilter=miplot.filteritr_all):
-    all_itrs = np.array([[r, itr, itr.exact_error, r.iter_total_times[i],
+    all_itrs = np.array([[r, itr, itr.exact_error, itr.total_time,
                           itr.calcTotalWork(),
                           r.params.miproj_fix_lvl] for i, r, itr in
                          miplot.enum_iter_i(runs, fnFilter=fnFilter)])
@@ -421,7 +421,7 @@ def to_single_run(runs, fnFilter=miplot.filteritr_all):
     # Lower envelope work
     all_itrs = all_itrs[lower_envelope(all_itrs[:, 4]), :]
 
-    # Sort ovre work
+    # Sort over work
     ind = np.argsort(all_itrs[:, 4])
     all_itrs = all_itrs[ind, :]
 
@@ -466,12 +466,15 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
     # cmp_tags = [None, '-adapt', '-adapt-time',
     #             '-tdfit', '-full-adapt', '-td-theory']
 
-    cmp_labels = ['Single level', 'Multilevel', 'Adaptive Multilevel']
-    cmp_tags = ['SL', '-td-theory', '-adapt']
+    # cmp_labels = ['Single level', 'Multilevel', 'Adaptive Multilevel']
+    # cmp_tags = ['SL', '-td-theory', '-adapt']
 
     # cmp_labels = ['SL', 'ML', 'Adaptive ML', 'Adaptive ML - Arcsine',
     #               'Adaptive ML - Discard']
-    # cmp_tags = [None, '-td-theory', '-adapt', '-adapt-arcsine', '-adapt-discard']
+    # cmp_tags = ['SL', '-td-theory', '-adapt', '-adapt-arcsine', '-adapt-discard']
+
+    cmp_labels = ['SL', 'ML', 'Adaptive ML', 'Adaptive ML - Arcsine']
+    cmp_tags = ['SL', '-theory-discard', '-adapt-discard', '-adapt-arcsine-discard']
 
     # cmp_labels = ['SL', 'ML']
     # cmp_tags = [None, '-td-theory']
@@ -547,14 +550,16 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
     fnTimes = []
     fnTimes.append([
         "work-est-vs-error",
-        lambda run, i: run.iters[i].calcTotalWork()
-               if run.params.miproj_reuse_samples or run == fix_single_run[0] else
-               np.sum([run.iters[j].calcTotalWork() for j in range(i+1)]),
+        lambda run, i: np.sum([run.iters[j].calcTotalWork() for j in range(i+1)])
+               if run.params.miproj_reuse_samples else
+               run.iters[i].calcTotalWork(),
         "-", None, True, True])
 
     fnTimes.append([
         "total-time-vs-error",
-        lambda run, i: run.iter_total_times[i] if run != fix_single_run[0] else run.iters[i].total_time,
+        lambda run, i: run.iter_total_times[i]
+        if run.params.miproj_reuse_samples else
+        run.iters[i].total_time,
         "-", None, True, True])
 
     if plot_time_breakdown:
@@ -578,9 +583,9 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
             if j < 5:
                 continue
 
-            fnTimes.append(['times-vs-error-%d-alg' % j,
-                            lambda run, i, vv=v: calcTime(run, i, vv),
-                            "-", "%s - Algorithm" %  time_vars_name[j], True, False])
+            # fnTimes.append(['times-vs-error-%d-alg' % j,
+            #                 lambda run, i, vv=v: calcTime(run, i, vv),
+            #                 "-", "%s - Algorithm" %  time_vars_name[j], True, False])
             fnTimes.append(['times-vs-error-%d-est' % j,
                             lambda run, i, vv=v: calcTime(run, i, vv, False),
                             "-", "%s - Estimate" %  time_vars_name[j], True, False])
@@ -727,7 +732,8 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
                 fig_T.add_line(miplot.FunctionLine2D(fn=fnRate,
                                                      linewidth=1,
                                                      zorder=5,
-                                                     data=data, **Ref_kwargs))
+                                                     data=data[:-3, :],
+                                                     **Ref_kwargs))
 
     # Plot time break-down -- a figure for every run
     iter_stats_args = dict(work_bins=None,
@@ -735,27 +741,30 @@ def plotSingleLevel(runs, input_args, *args, **kwargs):
                            work_spacing=np.sqrt(2)/2,
                            fnFilterData=None)
 
-    for i in range(0, len(cmp_runs)):
-        for j in range(0, 5):
-            fig_T = add_fig("time-breakdown-%d" % i)
-            plotWorkVsMaxError(fig_T, rr, flip=True,
-                               fnWork=lambda run, i, vv=time_vars[j]: calcTime(run, i, vv),
-                               fnAggError=np.max,
-                               fmt='-',
-                               iter_stats_args=iter_stats_args,
-                               Ref_kwargs=None,
-                               label=time_vars_name[j])
-            fig_T.set_title(cmp_tags[i] + " - Alg")
+    if plot_time_breakdown:
+        for i in range(0, len(cmp_runs)):
+            for j in range(0, 5):
+                rr = cmp_runs[i]
 
-            fig_T = add_fig("time-breakdown-%d-est" % i)
-            plotWorkVsMaxError(fig_T, rr, flip=True,
-                               fnWork=lambda run, i, vv=time_vars[j]: calcTime(run, i, vv, False),
-                               fnAggError=np.max,
-                               fmt='-',
-                               iter_stats_args=iter_stats_args,
-                               Ref_kwargs=None,
-                               label=time_vars_name[j])
-            fig_T.set_title(cmp_tags[i] + " - Est")
+                #fig_T = add_fig("time-breakdown-%d" % i)
+                # plotWorkVsMaxError(fig_T, rr, flip=True,
+                #                    fnWork=lambda run, i, vv=time_vars[j]: calcTime(run, i, vv),
+                #                    fnAggError=np.max,
+                #                    fmt='-',
+                #                    iter_stats_args=iter_stats_args,
+                #                    Ref_kwargs=None,
+                #                    label=time_vars_name[j])
+                # fig_T.set_title(cmp_tags[i] + " - Alg")
+
+                fig_T = add_fig("time-breakdown-%d-est" % i)
+                plotWorkVsMaxError(fig_T, rr, flip=True,
+                                   fnWork=lambda run, i, vv=time_vars[j]: calcTime(run, i, vv, False),
+                                   fnAggError=np.max,
+                                   fmt='-',
+                                   iter_stats_args=iter_stats_args,
+                                   Ref_kwargs=None,
+                                   label=time_vars_name[j])
+                fig_T.set_title(cmp_tags[i] + " - Est")
 
     axes = [f.gca() for f in figures_dict.values()]
     if flip:
