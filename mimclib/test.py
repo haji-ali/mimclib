@@ -45,8 +45,6 @@ def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
                              "{}:{}: ({}) {}\n".format(os.path.basename(filename),
                                                        lineno, cat.__name__, msg)
     parser = argparse.ArgumentParser(add_help=True)
-    parser.register('type', 'bool',
-                    lambda v: v.lower() in ("yes", "true", "t", "1"))
     parser.add_argument("-db_user", type=str,
                         action="store", help="Database User", dest="db.user")
     parser.add_argument("-db_password", type=str,
@@ -135,7 +133,7 @@ def RunStandardTest(fnSampleLvl=None,
                                  fnSeed=fnSeed)
     return RunTest(mimcRun)
 
-def run_errors_est_program(fnExactErr=None):
+def init_post_program():
     from . import db as mimcdb
     import argparse
     import warnings
@@ -148,29 +146,23 @@ def run_errors_est_program(fnExactErr=None):
         warnings.simplefilter('ignore', MatplotlibDeprecationWarning)
     except:
         pass   # Ignore
-
-    def addExtraArguments(parser):
-        parser.register('type', 'bool', lambda v: v.lower() in ("yes",
-                                                                "true",
-                                                                "t", "1"))
-        parser.add_argument("-db_name", type=str, action="store",
-                            help="Database Name", dest="db.db")
-        parser.add_argument("-db_engine", type=str, action="store",
-                            help="Database Name", dest="db.engine")
-        parser.add_argument("-db_user", type=str, action="store",
-                            help="Database User", dest="db.user")
-        parser.add_argument("-db_host", type=str, action="store",
-                            help="Database Host", dest="db.host")
-        parser.add_argument("-db_password", type=str, action="store",
-                            help="Database Password", dest="db.password")
-        parser.add_argument("-db_tag", type=str, action="store",
-                            help="Database Tags")
-        parser.add_argument("-qoi_exact_tag", type=str, action="store")
-        parser.add_argument("-qoi_exact", type=float, action="store",
-                            help="Exact value")
-
+      
     parser = argparse.ArgumentParser(add_help=True)
-    addExtraArguments(parser)
+    parser.add_argument("-db_name", type=str, action="store",
+                        help="Database Name", dest="db.db")
+    parser.add_argument("-db_engine", type=str, action="store",
+                        help="Database Name", dest="db.engine")
+    parser.add_argument("-db_user", type=str, action="store",
+                        help="Database User", dest="db.user")
+    parser.add_argument("-db_host", type=str, action="store",
+                        help="Database Host", dest="db.host")
+    parser.add_argument("-db_password", type=str, action="store",
+                        help="Database Password", dest="db.password")
+    parser.add_argument("-db_tag", type=str, action="store",
+                        help="Database Tags")
+    # parser.add_argument("-qoi_exact_tag", type=str, action="store")
+    # parser.add_argument("-qoi_exact", type=float, action="store", help="Exact value")
+    
     args = parse_known_args(parser)
     db = mimcdb.MIMCDatabase(**args.db)
     if not hasattr(args, "db_tag"):
@@ -180,21 +172,23 @@ def run_errors_est_program(fnExactErr=None):
     run_data = db.readRuns(tag=args.db_tag)
     if len(run_data) == 0:
         raise Exception("No runs!!!")
-    fnNorm = run_data[0].fn.Norm
-    if hasattr(args, "qoi_exact_tag"):
-        assert args.qoi_exact is None, "Multiple exact values given"
-        exact_runs = db.readRuns(tag=args.qoi_exact_tag)
-        from . import plot
-        args.qoi_exact, _ = plot.estimate_exact(exact_runs)
-        print("Estimated exact value is {}".format(args.qoi_exact))
-        if fnExactErr is not None:
-            fnExactErr = lambda itrs, r=exact_runs[0], fn=fnExactErr: fn(r, itrs)
-    elif fnExactErr is not None:
-        fnExactErr = lambda itrs, fn=fnExactErr: fn(itrs[0].parent, itrs)
+    
+    # fnNorm = run_data[0].fn.Norm
+    # if hasattr(args, "qoi_exact_tag"):
+    #     assert args.qoi_exact is None, "Multiple exact values given"
+    #     exact_runs = db.readRuns(tag=args.qoi_exact_tag)
+    #     from . import plot
+    #     args.qoi_exact, _ = plot.estimate_exact(exact_runs)
+    #     print("Estimated exact value is {}".format(args.qoi_exact))
+    #     if fnExactErr is not None:
+    #         fnExactErr = lambda itrs, r=exact_runs[0], fn=fnExactErr: fn(r, itrs)
+    # elif fnExactErr is not None:
+    #     fnExactErr = lambda itrs, fn=fnExactErr: fn(itrs[0].parent, itrs)
 
-    if hasattr(args, "qoi_exact") and fnExactErr is None:
-        fnExactErr = lambda itrs, e=args.qoi_exact: \
-                     fnNorm([v.calcEg() + e*-1 for v in itrs])
+    # if hasattr(args, "qoi_exact") and fnExactErr is None:
+    #     fnExactErr = lambda itrs, e=args.qoi_exact: \
+    #                  fnNorm([v.calcEg() + e*-1 for v in itrs])
 
-    print("Updating errors")
-    db.update_exact_errors(run_data, fnExactErr)
+    #print("Updating errors")
+    
+    return db, run_data

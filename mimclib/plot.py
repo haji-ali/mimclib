@@ -1762,7 +1762,7 @@ def append_ext(path, ext):
     return path + ext
 
 
-def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
+def run_plot_program(fnPlot=genBooklet, fnExactErr=None, fnAddExtraArgs=None, **kwargs):
     warnings.formatwarning = lambda msg, cat, filename, lineno, line: \
                              "{}:{}: ({}) {}\n".format(os.path.basename(filename),
                                                        lineno, cat.__name__, msg)
@@ -1771,42 +1771,41 @@ def run_plot_program(fnPlot=genBooklet, fnExactErr=None, **kwargs):
         warnings.simplefilter('ignore', MatplotlibDeprecationWarning)
     except:
         pass   # Ignore
-    def addExtraArguments(parser):
-        parser.add_argument("-db_name", type=str, action="store",
-                            help="Database Name", dest='db.db')
-        parser.add_argument("-db_engine", type=str, action="store",
-                            help="Database Name", dest='db.engine')
-        parser.add_argument("-db_user", type=str, action="store",
-                            help="Database User", dest='db.user')
-        parser.add_argument("-db_host", type=str, action="store",
-                            help="Database Host", dest='db.host')
-        parser.add_argument("-db_password", type=str, action="store",
-                            help="Database password", dest='db.password')
-        parser.add_argument("-db_tag", type=str, action="store",
-                            nargs='+', help="Database Tags")
-        parser.add_argument("-label_fmt", type=str, action="store",
-                            default=None, help="Output labels")
-        parser.add_argument("-qoi_exact", type=float, action="store",
-                            help="Exact value")
-        parser.add_argument("-o", type=str,
-                            action="store", help="Output file")
-        parser.add_argument("-cmd", type=str, action="store",
-                            help="Command to execute after plotting")
-        parser.add_argument("-verbose", default=False, action="store_true")
-        parser.add_argument("-filteritr", type=str, action="store",
-                            default='all',
-                            choices=['convergent', 'all', 'last'])
-        parser.add_argument("-abs_err", dest='relative',
-                            action="store_false", default=True)
-        parser.add_argument("-data_file", dest='data_file', type=str,
-                            default=None)
-        parser.add_argument("-done_flag", type=int, nargs='+', action="store")
-        parser.add_argument("-qoi_exact_tag", type=str, action="store")
-        parser.add_argument("-formats", type=str, action="store",
-                            nargs="+", default=["pdf"])
-
     parser = argparse.ArgumentParser(add_help=True)
-    addExtraArguments(parser)
+    parser.add_argument("-db_name", type=str, action="store",
+                        help="Database Name", dest='db.db')
+    parser.add_argument("-db_engine", type=str, action="store",
+                        help="Database Name", dest='db.engine')
+    parser.add_argument("-db_user", type=str, action="store",
+                        help="Database User", dest='db.user')
+    parser.add_argument("-db_host", type=str, action="store",
+                        help="Database Host", dest='db.host')
+    parser.add_argument("-db_password", type=str, action="store",
+                        help="Database password", dest='db.password')
+    parser.add_argument("-db_tag", type=str, action="store",
+                        nargs='+', help="Database Tags")
+    parser.add_argument("-label_fmt", type=str, action="store",
+                        default=None, help="Output labels")
+    parser.add_argument("-qoi_exact", type=float, action="store",
+                        help="Exact value")
+    parser.add_argument("-o", type=str,
+                        action="store", help="Output file")
+    parser.add_argument("-cmd", type=str, action="store",
+                        help="Command to execute after plotting")
+    parser.add_argument("-verbose", default=False, action="store_true")
+    parser.add_argument("-filteritr", type=str, action="store",
+                        default='all',
+                        choices=['convergent', 'all', 'last'])
+    parser.add_argument("-abs_err", dest='relative',
+                        action="store_false", default=True)
+    parser.add_argument("-data_file", dest='data_file', type=str,
+                        default=None)
+    parser.add_argument("-done_flag", type=int, nargs='+', action="store")
+    parser.add_argument("-qoi_exact_tag", type=str, action="store")
+    parser.add_argument("-formats", type=str, action="store",
+                        nargs="+", default=["pdf"])
+    if fnAddExtraArgs is not None:
+        fnAddExtraArgs(parser)
     args = test.parse_known_args(parser)
     for k in kwargs.keys():
         args.__dict__[k] = kwargs[k]

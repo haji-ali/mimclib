@@ -519,12 +519,7 @@ ORDER BY dr.run_id, dr.iteration_idx
             return list(filter(lambda r: len(r.iters) > 0, runs))
         return runs
 
-    def update_exact_errors(self, runs, fnItrError=None):
-        if fnItrError is not None:
-            itrs = sum([[itr for itr in r.iters] for r in runs], [])
-            errs = fnItrError(itrs)
-            for i, itr in enumerate(itrs):
-                itr.exact_error = errs[i]
+    def update_exact_errors(self, runs):        
         with self.connect() as cur:
             for run in runs:
                 for itr in run.iters:
