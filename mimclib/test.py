@@ -51,7 +51,7 @@ def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
                         action="store", help="Database password", dest="db.password")
     parser.add_argument("-db_host", type=str,
                         action="store", help="Database Host", dest="db.host")
-    parser.add_argument("-db_engine", type=str, default='mysql',
+    parser.add_argument("-db_engine", type=str,
                         action="store", help="Database Host", dest="db.engine")
     parser.add_argument("-db_tag", type=str,
                         action="store", help="Database Tag")
@@ -107,13 +107,13 @@ def RunTest(mimcRun):
     try:
         mimcRun.doRun()
     except:
-        if hasattr(mimcRun.params.db, "db"):
+        if hasattr(mimcRun.params, "db"):
             db = mimcdb.MIMCDatabase(**mimcRun.params.db)
             db.markRunFailed(mimcRun.db_data.run_id,
                              total_time=time.clock()-tStart)
         raise   # If you don't want to raise, make sure the following code is not executed
 
-    if hasattr(mimcRun.params.db, "db"):
+    if hasattr(mimcRun.params, "db"):
         db = mimcdb.MIMCDatabase(**mimcRun.params.db)
         db.markRunSuccessful(mimcRun.db_data.run_id,
                              total_time=time.clock()-tStart)
