@@ -793,7 +793,7 @@ max_lvl        = {}
            self.last_itr._lvls.to_sparse_matrix().max(axis=0).todense()))
 
         if verbose < VERBOSE_DEBUG:
-            print(output)
+            print("".join(output))
             return
 
         output.append(self.last_itr.to_string(self.fn.Norm))
