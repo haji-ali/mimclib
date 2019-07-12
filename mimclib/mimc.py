@@ -445,7 +445,9 @@ class MIMCItrData(object):
             V_fine = fnNorm(self.calcFineCentralMoment(moment=2))
             V_sample = fnNorm(self.calcDeltaCentralMoment(moment=2))
 
-        E = fnNorm(self.calcEl())
+        deltaE = fnNorm(self.calcDeltaCentralMoment(moment=1, weighted=True))
+        fineE = fnNorm(self.calcFineCentralMoment(moment=1, weighted=True))
+
         T = self.calcTl()
 
         columns = []
@@ -453,12 +455,15 @@ class MIMCItrData(object):
         def add_column(title, fmt, value_fmt, fn):
             columns.append([title, fmt, value_fmt, fn])
 
-        add_column("Level", "<8", "<8", lambda i: str(self.lvls_get(i)))
-        add_column("E", "<10", "<10.4e", lambda i: E[i])
+        add_column("Level", "<8", "<8", lambda i:
+                   ("*" if self.active_lvls[i] < 0 else "")
+                   + str(self.lvls_get(i)))
+        add_column("DeltaE", "<10", "<10.4e", lambda i: deltaE[i])
+        add_column("fineE", "<10", "<10.4e", lambda i: fineE[i])
         if has_var:
             add_column("V", "<10", "<10.4e", lambda i: V[i])
             add_column("fineV", "<10", "<10.4e", lambda i: V_fine[i])
-            add_column("DeltaV", "<10", "<10.4e", lambda i: V_sample[i])
+            add_column("deltaV", "<10", "<10.4e", lambda i: V_sample[i])
         add_column("W", "<10", "<10.4e", lambda i: Wl[i])
         add_column("M", "<8", "<8", lambda i: self.M[i])
         add_column("Time", "<15", "<15.4e", lambda i: T[i])
@@ -1140,7 +1145,7 @@ max_lvl        = {}
                 self.output(verbose=self.params.verbose)
                 self.print_info("------------------------------------------------")
                 if samples_added:
-                    if self.fn.ItrDone is not None:
+                    if hasattr(self.fn, "ItrDone"):
                         # ItrDone should return true if a new iteration must be added
                         add_new_iteration = self.fn.ItrDone()
                 if self.params.lsq_est or self.is_itr_tol_satisfied():

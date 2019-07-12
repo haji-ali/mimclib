@@ -83,7 +83,7 @@ def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
     if fnSeed is not None:
         fnSeed(mimcRun.params.qoi_seed)
 
-    if hasattr(mimcRun.params.db, "db"):
+    if hasattr(mimcRun.params, "db"):
         db = mimcdb.MIMCDatabase(**mimcRun.params.db)
         mimcRun.db_data = mimc.Nestedspace()
         mimcRun.db_data.run_id = db.createRun(mimc_run=mimcRun,
