@@ -23,6 +23,22 @@ def public(sym):
     __all__.append(sym.__name__)
     return sym
 
+def printTable(header, rows, bh = '_', bv = '|', min_len=None, underline=True):
+    cols = [list(x) for x in zip(*rows)]
+    lengths = [max(len(hdr),
+                   max(map(len, map(str, col)))) for hdr, col in zip(header, cols)]
+    if min_len is not None:
+        for i in range(0, len(min_len)):
+            lengths[i] = max(lengths[i], min_len[i])
+    f = bv.join(' {:<%d} ' % l for l in lengths)
+    u = ' ' if underline else '_'
+    s = ("{0}{1}{0}".format(u, bv)) \
+        .join(("{:%s^%d}" % (u, l)).format(hdr) for l, hdr in zip(lengths, header))
+    s = "{0}{1}{0}".format(u, s)
+    output = ["\033[4m{}\033[0m".format(s)] if underline else [s]
+    output.extend([f.format(*row) for row in rows])
+    return "\n".join(output)
+
 @public
 class Nestedspace(argparse.Namespace):
     def __setattr__(self, name, value):
@@ -452,31 +468,28 @@ class MIMCItrData(object):
 
         columns = []
 
-        def add_column(title, fmt, value_fmt, fn):
-            columns.append([title, fmt, value_fmt, fn])
+        def add_column(title, fn, width, fmt="", hdr_algn="<", val_algn="<"):
+            columns.append([title, fn, fmt, width, hdr_algn, val_algn])
 
-        add_column("Level", "<8", "<8", lambda i:
+        add_column("Level", lambda i:
                    ("*" if self.active_lvls[i] < 0 else "")
-                   + str(self.lvls_get(i)))
-        add_column("DeltaE", "<10", "<10.4e", lambda i: deltaE[i])
-        add_column("fineE", "<10", "<10.4e", lambda i: fineE[i])
+                   + str(self.lvls_get(i)), 4)
+        add_column("deltaE", lambda i: deltaE[i], 10, ".4e")
+        add_column("fineE", lambda i: fineE[i], 10, ".4e")
         if has_var:
-            add_column("V", "<10", "<10.4e", lambda i: V[i])
-            add_column("fineV", "<10", "<10.4e", lambda i: V_fine[i])
-            add_column("deltaV", "<10", "<10.4e", lambda i: V_sample[i])
-        add_column("W", "<10", "<10.4e", lambda i: Wl[i])
-        add_column("M", "<8", "<8", lambda i: self.M[i])
-        add_column("Time", "<15", "<15.4e", lambda i: T[i])
+            add_column("V", lambda i: V[i], 10, ".4e")
+            add_column("fineV", lambda i: V_fine[i], 10, ".4e")
+            add_column("deltaV", lambda i: V_sample[i], 10, ".4e")
+        add_column("W", lambda i: Wl[i], 10, ".4e")
+        add_column("M", lambda i: self.M[i], 5)
+        add_column("Time", lambda i: T[i], 10, ".4e")
 
-        header_fmt = "_|_".join(["{{:_{}}}".format(c[1]) for c in columns]) + "\n"
-        value_fmt = " | ".join(["{{:{}}}".format(c[2]) for c in columns]) + "\n"
-
-        output = header_fmt.format(*[c[0] for c in columns])
-
+        rows = []
         for i in range(0, self.lvls_count):
-            #,100 * np.sqrt(V[i]) / np.abs(E[i])
-            output += value_fmt.format(*[c[3](i) for c in columns])
-        return output
+            rows.append(["{{:{}}}".format(c[2]).format(c[1](i)) for c in columns])
+        header = [c[0] for c in columns]
+        min_len = [c[3] for c in columns]
+        return printTable(header, rows, min_len=min_len)
 
 
 @public
@@ -755,10 +768,10 @@ Not needed if fnHierarchy is provided.")
         return mimcgrp
 
     def output(self, verbose):
-        output = ''
+        output = []
         if verbose >= VERBOSE_INFO:
             p = 2 if self.use_rmse else 1
-            output += '''Eg             = {}
+            output.append('''Eg             = {}
 Bias{}         = {:.4e} | {:.4e}
 Stat. err{}    = {:.4e} | {:.4e}
 Error est.     = {:.4e} | {:.4e}
@@ -777,14 +790,14 @@ max_lvl        = {}
            self.last_itr.calcTotalWork(),
            self.last_itr.calcTotalTime(),
            self.iter_total_times[-1],
-           self.last_itr._lvls.to_sparse_matrix().max(axis=0).todense())
+           self.last_itr._lvls.to_sparse_matrix().max(axis=0).todense()))
 
         if verbose < VERBOSE_DEBUG:
-            print(output, end="")
+            print(output)
             return
 
-        output += self.last_itr.to_string(self.fn.Norm)
-        print(output, end="")
+        output.append(self.last_itr.to_string(self.fn.Norm))
+        print("".join(output))
 
     def fnNorm1(self, x):
         """ Helper function to return norm of a single element
