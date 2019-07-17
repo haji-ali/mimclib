@@ -792,12 +792,10 @@ max_lvl        = {}
            self.iter_total_times[-1],
            self.last_itr._lvls.to_sparse_matrix().max(axis=0).todense()))
 
-        if verbose < VERBOSE_DEBUG:
+        if verbose >= VERBOSE_DEBUG:
+            output.append(self.last_itr.to_string(self.fn.Norm))
+        if len(output) > 0:
             print("".join(output))
-            return
-
-        output.append(self.last_itr.to_string(self.fn.Norm))
-        print("".join(output))
 
     def fnNorm1(self, x):
         """ Helper function to return norm of a single element
