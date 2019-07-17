@@ -138,8 +138,20 @@ CREATE VIEW vw_run_sum AS SELECT vw_runs.run_id, tag,
 TRUNCATE(TIMESTAMPDIFF(SECOND, vw_runs.creation_date,
         max(vw_iters.creation_date))/3600., 4) as "wall time (hours)",
 TRUNCATE(sum(vw_iters.totalTime) / 3600., 4) as "totTime (hours)",
-min(vw_iters.TOL) as minTOL from vw_runs LEFT JOIN vw_iters on
+min(vw_iters.TOL) as minTOL, vw_run.TOL as target_TOL
+        from vw_runs LEFT JOIN vw_iters on
 vw_iters.run_id=vw_runs.run_id GROUP BY vw_runs.run_id, tag;
+
+CREATE VIEW vw_run_sum AS SELECT run_id, tag, wall_time "wall time (hours)",
+        totTime as "totTime (hours)", minTOL, targetTOL,
+        wall_time * POWER(minTOL / targetTOL, 2) as least_time
+        from vw_run_sum_internal;
+
+CREATE VIEW vw_run_sum_internal AS SELECT vw_runs.run_id as run_id, tag,
+        TRUNCATE(TIMESTAMPDIFF(SECOND, vw_runs.creation_date, max(vw_iters.creation_date))/3600., 4)
+        as wall_time, TRUNCATE(sum(vw_iters.totalTime) / 3600., 4) as totTime, min(vw_iters.TOL) as
+        minTOL, vw_runs.TOL as targetTOL from vw_runs LEFT JOIN vw_iters on
+        vw_iters.run_id=vw_runs.run_id GROUP BY vw_runs.run_id, tag;
 
 -- CREATE USER 'USER'@'%';
 -- GRANT ALL PRIVILEGES ON *.* TO 'USER'@'%' WITH GRANT OPTION;
