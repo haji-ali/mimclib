@@ -5,6 +5,7 @@ from __future__ import print_function
 import numpy as np
 import warnings
 import warnings
+import os
 import os.path
 import mimclib.mimc as mimc
 import mimclib.db as mimcdb
@@ -84,7 +85,7 @@ def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
         fnSeed(mimcRun.params.qoi_seed)
 
     if hasattr(mimcRun.params, "db"):
-        db = mimcdb.MIMCDatabase(**mimcRun.params.db)
+        db = mimcdb.MIMCDatabase(**__transform_db_args(mimcRun.params.db))
         mimcRun.db_data = mimc.Nestedspace()
         mimcRun.db_data.run_id = db.createRun(mimc_run=mimcRun,
                                               tag=mimcRun.params.db_tag)
@@ -108,13 +109,13 @@ def RunTest(mimcRun):
         mimcRun.doRun()
     except:
         if hasattr(mimcRun.params, "db"):
-            db = mimcdb.MIMCDatabase(**mimcRun.params.db)
+            db = mimcdb.MIMCDatabase(**__transform_db_args(mimcRun.params.db))
             db.markRunFailed(mimcRun.db_data.run_id,
                              total_time=time.clock()-tStart)
         raise   # If you don't want to raise, make sure the following code is not executed
 
     if hasattr(mimcRun.params, "db"):
-        db = mimcdb.MIMCDatabase(**mimcRun.params.db)
+        db = mimcdb.MIMCDatabase(**__transform_db_args(mimcRun.params.db))
         db.markRunSuccessful(mimcRun.db_data.run_id,
                              total_time=time.clock()-tStart)
     return mimcRun
@@ -132,6 +133,15 @@ def RunStandardTest(fnSampleLvl=None,
                                  fnInit=fnInit, fnItrDone=fnItrDone,
                                  fnSeed=fnSeed)
     return RunTest(mimcRun)
+
+
+def __transform_db_args(db_args):
+    if hasattr(db_args, "password"):
+        # Assume environmental variable
+        db_args = dict(**db_args)
+        db_args["password"] = os.environ[db_args["password"]]
+        return db_args
+    return db_args
 
 def init_post_program():
     from . import db as mimcdb
@@ -164,7 +174,7 @@ def init_post_program():
     # parser.add_argument("-qoi_exact", type=float, action="store", help="Exact value")
     
     args = parse_known_args(parser)
-    db = mimcdb.MIMCDatabase(**args.db)
+    db = mimcdb.MIMCDatabase(**__transform_db_args(args.db))
     if not hasattr(args, "db_tag"):
         warnings.warn("You did not select a database tag!!")
     print("Reading data")
