@@ -578,15 +578,17 @@ def plotErrorsVsTOL(ax, runs, *args, **kwargs):
     modifier = modifier if relative else 1.
     filteritr = kwargs.pop("filteritr", filteritr_convergent)
 
+    xy = np.array([[itr.TOL,
+                    itr.exact_error,
+                    itr.total_error_est] for _, itr in enum_iter(runs, filteritr)])
+    if len(xy) == 0:
+        return None, []
+    xy[:, 1:3] = xy[:, 1:3] * modifier
+
     ax.set_xlabel(r'\tol')
     ax.set_ylabel('Relative error' if relative else 'Error')
     ax.set_yscale('log')
     ax.set_xscale('log')
-
-    xy = np.array([[itr.TOL,
-                    itr.exact_error,
-                    itr.total_error_est] for _, itr in enum_iter(runs, filteritr)])
-    xy[:, 1:3] = xy[:, 1:3] * modifier
 
     TOLs, error_est = __get_stats(xy, staton=2)
     plotObj = []
