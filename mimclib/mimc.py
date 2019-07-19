@@ -452,7 +452,8 @@ class MIMCItrData(object):
             raise Exception("Iteration does not use all levels!")
         return self._lvls
 
-    def to_string(self, fnNorm):
+    def to_string(self, fnNorm, TOL=None):
+        add_consE = TOL is not None
         has_var = self.moments >= 2
 
         Wl = self.calcWl()
@@ -476,6 +477,12 @@ class MIMCItrData(object):
                    + str(self.lvls_get(i)), 4)
         add_column("deltaE", lambda i: deltaE[i], 10, ".4e")
         add_column("fineE", lambda i: fineE[i], 10, ".4e")
+        if add_consE:
+            coarseE = fineE
+            coarseE[1:] = fineE[1:] - deltaE[1:]
+            consE = np.abs(fineE[1:] - coarseE[:-1]) / TOL
+            add_column("consE", lambda i: consE[i-1] if i>0 else np.nan, 10, ".4e")
+
         if has_var:
             add_column("V", lambda i: V[i], 10, ".4e")
             add_column("fineV", lambda i: V_fine[i], 10, ".4e")
@@ -771,7 +778,7 @@ Not needed if fnHierarchy is provided.")
         output = []
         if verbose >= VERBOSE_INFO:
             p = 2 if self.use_rmse else 1
-            output.append('''Eg             = {}
+            output.append('''Eg             = {}, [{}, {}]
 Bias{}         = {:.4e} | {:.4e}
 Stat. err{}    = {:.4e} | {:.4e}
 Error est.     = {:.4e} | {:.4e}
@@ -780,6 +787,8 @@ Iteration Time = {:.4e}
 TotalTime      = {:.4e}
 max_lvl        = {}
 '''.format(str(self.last_itr.calcEg()),
+           str(self.last_itr.calcEg()+self.last_itr.TOL/2),
+           str(self.last_itr.calcEg()-self.last_itr.TOL/2),
            "^2" if self.use_rmse else "  ",
            self.bias**p,
            (1-self.params.theta) * self.last_itr.TOL**p,
@@ -793,7 +802,7 @@ max_lvl        = {}
            self.last_itr._lvls.to_sparse_matrix().max(axis=0).todense()))
 
         if verbose >= VERBOSE_DEBUG:
-            output.append(self.last_itr.to_string(self.fn.Norm))
+            output.append(self.last_itr.to_string(self.fn.Norm, TOL=self.last_itr.TOL))
         if len(output) > 0:
             print("".join(output))
 
