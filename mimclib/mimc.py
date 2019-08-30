@@ -836,6 +836,12 @@ max_lvl        = {}
         return np.maximum(np.reshape(self.params.M0, (1,))[-1],
                           int(np.ceil((theta * TOL / self._Ca)**-2 * V)))
 
+    def bias_target(self, TOL):
+        theta = self.params.theta
+        if self.use_rmse:
+            theta = np.sqrt(theta)
+        return theta * TOL
+
     ################## Bayesian specific functions
     def _estimateBayesianBias(self, L=None):
         L = L or self.all_itr.lvls_count-1
@@ -1183,7 +1189,7 @@ max_lvl        = {}
                             self.last_itr.lvls_count, L+1).reshape((-1, 1)))
                         self._update_active_lvls()
                         self._estimateAll()
-                else:
+                elif self.bias > self.bias_target(TOL):
                     # Bias is not satisfied (or this is the first iteration)
                     # Add more levels
                     newTodoM = self._extendLevels()
@@ -1215,8 +1221,9 @@ max_lvl        = {}
 
                 if not self.params.reuse_samples:
                     self.last_itr.zero_samples()
+                    
                 samples_added = self._genSamples(todoM) or samples_added
-                self.last_itr.total_time = timer.toc()
+                self.last_itr.total_time += timer.toc()
                 self.output(verbose=self.params.verbose)
                 self.print_info("------------------------------------------------")
                 if samples_added:
@@ -1391,20 +1398,21 @@ def extend_prof_lvls(run, profCalc, min_lvls):
     # number of levels
     # Only add levels if bias is not satisfied
     p = 2. if run.use_rmse else 1.
-    if run.bias**p < (1-run.params.theta) * run.last_itr.TOL**p:
-        return
-    added = 0
     lvls = run.last_itr.get_lvls()
+    if run.bias**p < (1-run.params.theta) * run.last_itr.TOL**p \
+       and len(lvls) >= min_lvls:
+        return
+    to_add = np.maximum(1, min_lvls - len(lvls))
     if len(lvls) == 0:
         # add seed
         lvls.add_from_list([[]])
-        added += 1
-    while added < 1 or (len(lvls) < min_lvls):
+        to_add -= 1
+    while to_add > 0:
         if hasattr(profCalc, "max_dim"):
             lvls.expand_set(profCalc, max_dim=profCalc.max_dim)
         else:
             lvls.expand_set(profCalc, -1)
-        added += 1
+        to_add -= 1
 
 
 def default_sample_all(lvls, M, moments, fnSample, fnWorkModel=None,
@@ -1491,37 +1499,34 @@ def default_sample_all_sums(lvls, M, moments, fnSampleSums,
                 psums_delta[i] += cur_fsums
             else:
                 psums_delta[i] += cur_diffsums
-            calcM[i] += cur_M
+            calcM[i] += cur_M 
     return calcM, psums_delta, psums_fine, total_time, total_work
 
 
 def estimate_bias_setutil(run):
     itr = run.last_itr
-    El = itr.calcEl()
-    El[itr.active_lvls == 0] = np.inf
+    El = itr.calcDeltaCentralMoment(moment=1)
     El_norm = np.empty(itr.lvls_count)
     El_norm.fill(np.inf)
-    act = itr.active_lvls > 0
+    act = itr.active_lvls >= 0
     El_norm[act] = run.fn.Norm(El[act])
     bias = itr.get_lvls().estimate_bias(El_norm)
     return bias
 
 def estimate_bias_abs_bnd(run):
     itr = run.last_itr
-    El = itr.calcEl()
-    El[itr.active_lvls == 0] = np.inf
+    El = itr.calcDeltaCentralMoment(moment=1)
     El_norm = np.empty(len(itr.lvls_count))
     El_norm.fill(np.inf)
     act = itr.active_lvls >= 0
     El_norm[act] = self.fn.Norm(El[act])
-    return np.sum(El_norm[itr.get_lvls().is_boundary()])
+    return np.sum(El_norm[np.logical_and(itr.get_lvls().is_boundary(), act)])
 
 
 def estimate_bias_bnd(run):
     itr = run.last_itr
-    El = itr.calcEl()
-    El[itr.active_lvls == 0] = np.inf
-    El_bnd = El[itr.get_lvls().is_boundary()]
+    El = itr.calcDeltaCentralMoment(moment=1)
+    El_bnd = El[np.logical_and(itr.get_lvls().is_boundary(), itr.active_lvls>=0)]
     if np.any([e is None for e in El_bnd]):
         bias = np.inf
     else:
