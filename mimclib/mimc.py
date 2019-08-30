@@ -392,6 +392,10 @@ class MIMCItrData(object):
         return np.sum(self.tW, axis=0)
 
     @property
+    def active_lvls_count(self):
+        return np.sum(self.active_lvls>=0)
+    
+    @property
     def total_error_est(self):
         stat_err = self.stat_error if not np.isnan(self.stat_error) else 0
         if self.parent.use_rmse:
