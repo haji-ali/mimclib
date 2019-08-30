@@ -772,6 +772,8 @@ previous estimates.")
             add_store('min_lvl', type=int, default=3,
                       help="The initial number of levels to run \
 the first iteration. Not needed if a profit calculator is provided.")
+            add_store('zero_protection', type=int, default=0,
+                      help="The number of times to repeat min sampling if output is zero.")
             add_store('max_add_itr', type=int, default=2,
                       help="Maximum number of additonal iterations\
 to run when the MIMC is expected to but is not converging.\
@@ -987,20 +989,42 @@ max_lvl        = {}
         # return np.concatenate((self.last_itr.M[:prev], newTodoM[prev:self.last_itr.lvls_count]))
 
     #@profile
-    def _genSamples(self, totalM):
+    def _genSamples(self, totalM, zero_protection=0):
         totalM = totalM.copy()
         lvls = self.last_itr.get_lvls()
         lvls_count = self.last_itr.lvls_count
         assert(lvls_count == len(lvls))
         active = self.last_itr.active_lvls >= 0
-        active = np.logical_and(active, totalM > self.last_itr.M)
-        totalM[np.logical_not(active)] = 0    # No need to do any samples
+        needed = np.logical_and(active, totalM > self.last_itr.M)
         totalM[active] -= self.last_itr.M[active]
+        totalM[np.logical_not(needed)] = 0    # No need to do any samples
+        totalM[active] = np.maximum(totalM[active], self.params.M0)   # TODO: TEMP
         if np.sum(totalM) == 0:
             return False
         calcM, psums_delta, psums_fine, \
             total_time, total_work = self.fn.SampleAll(lvls, totalM,
                                                        self.last_itr.moments)
+        while self.last_itr.moments >= 2 and zero_protection > 0:
+            # Need to check variance and the code below does not actually work
+            raise NotImplementedError()
+            not_zero = psums_fine[:, 1]!=0  # The second moment
+            # Exclude first level
+            not_zero[1:] = np.logical_and(not_zero,
+                                          psums_delta[:, 1] != psums_fine[:, 1])
+            totalM[not_zero] = 0  # No need for more samples when not zero
+            totalM *= 2
+            if np.sum(totalM) == 0:
+                break
+            new_calcM, new_psums_delta, new_psums_fine, \
+                new_total_time, new_total_work = self.fn.SampleAll(lvls, totalM,
+                                                                   self.last_itr.moments)
+            calcM += new_calcM
+            psums_delta += new_psums_delta
+            psums_fine += new_psums_fine
+            total_time += new_total_time
+            total_work += new_total_work
+            zero_protection -= 1
+
         for i in range(0, lvls_count):
             if calcM[i] <= 0:
                 continue
@@ -1202,10 +1226,13 @@ max_lvl        = {}
                     if self.params.M0 > 0:
                         if not self.params.reuse_samples:
                             self.last_itr.zero_samples()
-                        samples_added = self._genSamples(newTodoM) or samples_added
+                        samples_added = self._genSamples \
+                            (newTodoM,
+                             zero_protection=self.params.zero_protection) or samples_added
 
-                self.Q.theta = self._calcTheta(TOL, self.bias)
+                
                 self._check_levels()
+                self.Q.theta = self._calcTheta(TOL, self.bias)
 
                 todoM = _calcTheoryM(TOL, self.Q.theta,
                                      self.Vl_estimate,
