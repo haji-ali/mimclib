@@ -702,7 +702,7 @@ class MIMCRun(object):
         add_store('lsq_est', action='store_true',
                   help="Use Bayesian fitting to estimate bias, variance and optimize number \
 of levels in every iteration. This is based on CMLMC.")
-        add_store('dynamic_first_lvl', action='store_true',
+        add_store('dynamic_first_lvl', type=float, default=0, action='store',
                   help="If true, the first level will be found dynamically")
         add_store('moments', type=int, default=4, help="Number of moments to compute")
         add_store('discard_samples', action='store_false',
@@ -1015,8 +1015,8 @@ max_lvl        = {}
                               np.inf, self.params.theta)
         return self.params.theta
 
-    def _check_levels(self):
-        if not self.params.dynamic_first_lvl:
+    def _check_levels(self, TOL=None):
+        if self.params.dynamic_first_lvl < 1:
             return
         if self.last_itr.lvls_max_dim() > 1:
             raise NotImplementedError("Dynamic first level is not implemented for more than one dimension")
@@ -1026,26 +1026,67 @@ max_lvl        = {}
         # X: Control variate      (level 0)
         # Z: Y-X                  (difference)
         # \sqrt{W_Z V_Z} + \sqrt{W_X V_X} \leq \sqrt{W_Y V_Y}
-        changed = False
         while self.cur_start_level < self.last_itr.lvls_count-1:
+            to_change = False
             deltaWl = self.last_itr.calcWl()
             deltaVl = self.fn.Norm(self.last_itr.calcVl(weighted=False))
             fineVl = self.fn.Norm(self.last_itr.calcFineCentralMoment(moment=2,
                                                                       weighted=False))
-            VW_Z = deltaVl[self.cur_start_level+1]*deltaWl[self.cur_start_level+1]
-            VW_Y = fineVl[self.cur_start_level+1]*deltaWl[self.cur_start_level+1]
-            VW_X = fineVl[self.cur_start_level]*deltaWl[self.cur_start_level]
-            # from . import ipdb
-            # ipdb.embed()
-            if np.sqrt(VW_Z) + np.sqrt(VW_X) > np.sqrt(VW_Y):
+
+            new_start_lvl = self.cur_start_level+1
+            #sVW_Z = np.sqrt(deltaVl[self.cur_start_level+1]*deltaWl[self.cur_start_level+1])
+            sVW_Y = np.sqrt(fineVl[self.cur_start_level+1]*deltaWl[self.cur_start_level+1])
+            sVW_X = np.sqrt(fineVl[self.cur_start_level]*deltaWl[self.cur_start_level])
+            lhs = sVW_X
+            while new_start_lvl < self.last_itr.lvls_count:
+                lhs += np.sqrt(deltaVl[new_start_lvl]*deltaWl[new_start_lvl])
+                sVW_Y = np.sqrt(fineVl[new_start_lvl]*deltaWl[new_start_lvl])
+                self.print_debug("Starting at ", new_start_lvl, ", coeff is: ", lhs / sVW_Y)
+                if (lhs / sVW_Y > self.params.dynamic_first_lvl):
+                    to_change = True
+                    break
+                #break   # Disable multiple level change
+                new_start_lvl += 1
+            if to_change:
                 # Increase minimum level one at a time.
-                self.print_debug("sqrt(VW_Z)+sqrt(VW_X) > sqrt(VW_Y): {} > {}".format(np.sqrt(VW_Z) + np.sqrt(VW_X), np.sqrt(VW_Y)))
-                self.cur_start_level += 1
-                changed = True
+                #
+                # Assuming that we already have some samples in both levels, and the work
+                # already spent in level 0 will be discarded, this should be taken into account
+                # This should also depend on the tolerance that we are interested in.
+                reuse = TOL is not None and self.params.reuse_samples
+                if reuse:
+                    lvls = self.last_itr.get_lvls().to_dense_matrix()
+                    new_active_lvls = -1*np.ones(len(lvls))
+                    new_active_lvls[lvls[:, 0] > (new_start_level)] = 1
+                    new_active_lvls[lvls[:, 0] == (new_start_level+1)] = 0
+
+
+                    oldM = _calcTheoryM(TOL, self.Q.theta, self.Vl_estimate, deltaWl,
+                                        self.last_itr.active_lvls, Ca=self._Ca,
+                                        use_rmse=self.use_rmse)
+                    newM = _calcTheoryM(TOL, self.Q.theta, self.Vl_estimate, deltaWl,
+                                        new_active_lvls, Ca=self._Ca, use_rmse=self.use_rmse)
+
+                    done_M0 = self.last_itr.M[self.cur_start_level]
+                    done_M1 = self.last_itr.M[new_start_lvl]
+                    old_work = np.sum(np.maximum(oldM[:self.cur_start_level] -
+                                                 self.last_itr.M[:self.cur_start_level], 0) \
+                                      * deltaWl[:self.cur_start_level])
+                    new_work1 = np.maximum(newM[new_start_lvl] -
+                                           self.last_itr.M[new_start_lvl], 0) * \
+                                           deltaWl[new_start_lvl]
+                    
+                    reuse = old_work < new_work1
+                    self.print_debug("New work:", new_work1, "vs. old work:", (add_work0 + add_work1))
+
+                if not reuse:
+                    self.cur_start_level = new_start_lvl
+                    self.print_info("New start level", self.cur_start_level)
+                else:
+                    self.print_debug("Decided not to discard old work")
+                    break
             else:
                 break
-        if changed:
-            self.print_info("New start level", self.cur_start_level)
         self._update_active_lvls()
         self._estimateAll()
 
