@@ -459,12 +459,16 @@ class MIMCItrData(object):
     def to_string(self, fnNorm, TOL=None):
         add_consE = TOL is not None
         has_var = self.moments >= 2
+        has_kurt = self.moments >= 4
 
         Wl = self.calcWl()
         if has_var:
             V = self.Vl_estimate
             V_fine = fnNorm(self.calcFineCentralMoment(moment=2))
             V_sample = fnNorm(self.calcDeltaCentralMoment(moment=2))
+        if has_kurt:
+            K_fine = (fnNorm(self.calcFineCentralMoment(moment=4, weighted=True)) / V_fine**2.)**0.25
+            K_sample = (fnNorm(self.calcDeltaCentralMoment(moment=4, weighted=True)) / V_sample**2.)**0.25
 
         deltaE = fnNorm(self.calcDeltaCentralMoment(moment=1, weighted=True))
         fineE = fnNorm(self.calcFineCentralMoment(moment=1, weighted=True))
@@ -490,7 +494,13 @@ class MIMCItrData(object):
         if has_var:
             add_column("V", lambda i: V[i], 10, ".4e")
             add_column("fineV", lambda i: V_fine[i], 10, ".4e")
+            if has_kurt:
+                add_column("fineK", lambda i: K_fine[i], 10, ".4e")
+
             add_column("deltaV", lambda i: V_sample[i], 10, ".4e")
+            if has_kurt:
+                add_column("deltaK", lambda i: K_sample[i], 10, ".4e")
+
         add_column("W", lambda i: Wl[i], 10, ".4e")
         add_column("M", lambda i: self.M[i], 5)
         add_column("Time", lambda i: T[i], 10, ".4e")
