@@ -232,7 +232,7 @@ class MIMCItrData(object):
         self.stat_error = np.inf     # Sampling error (based on M)
         self.exact_error = np.nan    # Sampling error (based on M)
         self.TOL = None              # Target tolerance
-        self.total_time = None
+        self.total_time = 0
         self.Q = None
         self.Vl_estimate = np.zeros(0)
         self._lvls_count = 0
