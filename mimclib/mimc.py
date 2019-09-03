@@ -424,17 +424,21 @@ class MIMCItrData(object):
     def lvls_count(self):
         return self._lvls_count
 
-    def lvls_itr(self, start=0, end=None, min_dim=None):
+    def lvls_itr(self, start=0, end=None, min_dim=None, active_only=True):
         if end is None:
             end = self.lvls_count
         assert(end <= self.lvls_count)
-        return self._lvls.dense_itr(start, end, min_dim=min_dim)
+        for i, item in enumerate(self.dense_itr(start, end, min_dim=min_dim)):
+            if not active_only or self.active_lvls[i] >= 0:
+                yield item
 
-    def lvls_sparse_itr(self, start=0, end=None):
+    def lvls_sparse_itr(self, start=0, end=None, active_only=True):
         if end is None:
             end = self.lvls_count
         assert(end <= self.lvls_count)
-        return self._lvls.sparse_itr(start, end)
+        for i, j_data in enumerate(self._lvls.sparse_itr(start, end)):
+            if not active_only or self.active_lvls[i] >= 0:
+                yield j_data
 
     def lvls_find(self, ind, j=None):
         i = self._lvls.find(ind=ind, j=j)
