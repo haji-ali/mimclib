@@ -1002,7 +1002,7 @@ max_lvl        = {}
         needed = np.logical_and(active, totalM > self.last_itr.M)
         totalM[active] -= self.last_itr.M[active]
         totalM[np.logical_not(needed)] = 0    # No need to do any samples
-        totalM[active] = np.maximum(totalM[active], self.params.M0)   # TODO: TEMP
+        #totalM[active] = np.maximum(totalM[active], self.params.M0)   # TODO: TEMP
         if np.sum(totalM) == 0:
             return False
         calcM, psums_delta, psums_fine, \
