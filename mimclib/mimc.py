@@ -807,8 +807,8 @@ Iteration Time = {:.4e}
 TotalTime      = {:.4e}
 max_lvl        = {}
 '''.format(str(self.last_itr.calcEg()),
-           str(self.last_itr.calcEg()+self.last_itr.TOL/2),
-           str(self.last_itr.calcEg()-self.last_itr.TOL/2),
+           str(self.last_itr.calcEg()+self.last_itr.total_error_est/2),
+           str(self.last_itr.calcEg()-self.last_itr.total_error_est/2),
            "^2" if self.use_rmse else "  ",
            self.bias**p,
            (1-self.params.theta) * self.last_itr.TOL**p,
