@@ -490,9 +490,9 @@ class MIMCItrData(object):
         add_column("deltaE", lambda i: deltaE[i], 10, ".4e")
         add_column("fineE", lambda i: fineE[i], 10, ".4e")
         if add_consE:
-            coarseE = fineE
+            coarseE = fineE.copy()
             coarseE[1:] = fineE[1:] - deltaE[1:]
-            consE = np.abs(fineE[1:] - coarseE[:-1]) / TOL
+            consE = np.abs(fineE[1:] - coarseE[:-1]) / (2*TOL)
             add_column("consE", lambda i: consE[i-1] if i>0 else np.nan, 10, ".4e")
 
         if has_var:
@@ -1102,11 +1102,11 @@ max_lvl        = {}
                 new_start_lvl += 1
             if to_change:
                 # Increase minimum level one at a time.
-                #
+                new_start_lvl = self.cur_start_level+1
+                
                 # Assuming that we already have some samples in both levels, and the work
                 # already spent in level 0 will be discarded, this should be taken into account
                 # This should also depend on the tolerance that we are interested in.
-                new_start_lvl = self.cur_start_level+1
                 reuse = TOL is not None and self.params.reuse_samples
                 if reuse:
                     lvls = self.last_itr.get_lvls().to_dense_matrix()
@@ -1192,6 +1192,7 @@ max_lvl        = {}
         def less(a, b, rel_tol=1e-09, abs_tol=0.0):
             return a-b <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
         add_new_iteration = False
+        add_new_level = True
         for TOL in TOLs:
             self.print_info("TOL", TOL)
             timer.tic()
@@ -1237,7 +1238,7 @@ max_lvl        = {}
                             self.last_itr.lvls_count, L+1).reshape((-1, 1)))
                         self._update_active_lvls()
                         self._estimateAll()
-                elif self.bias > self.bias_target(TOL):
+                elif add_new_level:
                     # Bias is not satisfied (or this is the first iteration)
                     # Add more levels
                     newTodoM = self._extendLevels()
@@ -1280,7 +1281,10 @@ max_lvl        = {}
                         # ItrDone should return true if a new iteration must be added
                         add_new_iteration = self.fn.ItrDone()
                 if self.params.lsq_est or self.is_itr_tol_satisfied():
+                    add_new_level = False
                     break
+                add_new_level = self.bias > self.bias_target(TOL)
+                
             self.print_info("MIMC iteration for TOL={} took {} seconds".format(TOL, timer.toc()))
             self.print_info("################################################")
             if less(TOL, finalTOL) and self.total_error_est <= finalTOL:
