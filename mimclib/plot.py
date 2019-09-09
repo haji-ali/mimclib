@@ -297,7 +297,7 @@ def __get_stats(data, groupby=0, staton=1):
     return np.array(x), np.array(y)
 
 
-def __calc_moments(runs, seed=None, direction=None, fnNorm=None):
+def __calc_moments(runs, seed=None, direction=None, fnNorm=None, active_only=False):
     if seed is None and direction is None:
         direction = np.array([1]) #  Revert to 1-dim
 
@@ -306,17 +306,27 @@ def __calc_moments(runs, seed=None, direction=None, fnNorm=None):
     direction = np.array(direction) if direction is not None else np.ones(dim, dtype=np.uint32)
     moments = runs[0].last_itr.psums_delta.shape[1]
     psums_delta, psums_fine, Tl, Wl, Vl_estimate, M = [None]*6
+    all_org_inds = []
     for i, curRun in enumerate(runs):
         cur = seed
         inds = []
+        org_inds = []
         while True:
             ii = curRun.last_itr.lvls_find(cur)
             if ii is None:
                 break
-            inds.append(ii)
+            if active_only == 0 or \
+               (active_only < 0 and curRun.last_itr.active_lvls[ii] <= 0) or \
+               (active_only > 0 and curRun.last_itr.active_lvls[ii] >= 0):
+                inds.append(ii)
+                org_inds.append(cur)
             cur = cur + direction
 
         L = len(inds)
+        
+        if len(all_org_inds) < L:
+            all_org_inds = org_inds
+
         if psums_delta is None:
             psums_delta = curRun.last_itr.psums_delta[inds]
             psums_fine = curRun.last_itr.psums_fine[inds]
@@ -374,16 +384,24 @@ def __calc_moments(runs, seed=None, direction=None, fnNorm=None):
     ret.Tl = Tl
     ret.Wl = Wl
     ret.M = M
+    ret.inds = all_org_inds
     return ret
 
 @public
 def plot(ax, *args, **kwargs):
-    if (('yerr' in kwargs and kwargs['yerr'] is not None) or \
-        ('xerr' in kwargs and kwargs['xerr'] is not None) ):
+    xerr = kwargs.get('xerr', None)
+    yerr = kwargs.get('yerr', None)
+
+    def is_error_nonzero(err):
+        return err is not None and np.sum(np.abs(err)>0)>0
+
+    errorbar = is_error_nonzero(xerr) or is_error_nonzero(yerr)
+
+    if errorbar:
         return ax.errorbar(*args, **kwargs)
     else:
-        # kwargs.pop('yerr', None)   # Discard error
-        # kwargs.pop('xerr', None)   # Discard error
+        kwargs.pop('yerr', None)   # Discard error
+        kwargs.pop('xerr', None)   # Discard error
         if "fmt" in kwargs:        # Normalize behavior of errorbar() and plot()
             args = args + (kwargs.pop('fmt'), )
         return ax.plot(*args, **kwargs)
@@ -583,7 +601,7 @@ def plotErrorsVsTOL(ax, runs, *args, **kwargs):
                     itr.total_error_est] for _, itr in enum_iter(runs, filteritr)])
     if len(xy) == 0:
         return None, []
-    xy[:, 1:3] = xy[:, 1:3] * modifier
+    xy = xy * modifier
 
     ax.set_xlabel(r'\tol')
     ax.set_ylabel('Relative error' if relative else 'Error')
@@ -865,6 +883,9 @@ def _get_x_axis(ax, ret, kwargs):
     if x_axis == 'ell':
         ax.set_xlabel(r'$\ell$')
         x = np.arange(0, len(ret.central_delta_moments[:, 0]))
+    if x_axis == 'td':
+        ax.set_xlabel(r'$\ell$')
+        x = np.array([np.sum(i) for i in ret.inds])
     elif x_axis == 'log_ell':
         ax.set_xlabel(r'$\ell$')
         x = np.log(1+np.arange(0, len(ret.central_delta_moments[:, 0])))
@@ -898,6 +919,7 @@ def plotExpectVsLvls(ax, runs, *args, **kwargs):
         ret = __calc_moments(runs,
                              seed=kwargs.pop('seed', None),
                              direction=kwargs.pop('direction', None),
+                             active_only=kwargs.pop('active_only', False),
                              fnNorm=fnNorm)
 
     fine_kwargs = kwargs.pop('fine_kwargs', None)
@@ -915,14 +937,43 @@ def plotExpectVsLvls(ax, runs, *args, **kwargs):
 
 
     if fine_kwargs is not None:
-        El = ret.central_fine_moments[:, 0]
-        if ret.central_fine_moments.shape[1] > 1:
-            Vl = ret.central_fine_moments[:, 1]
-            yerr = 3*np.sqrt(np.abs(Vl[sorted_ind]/ret.M[sorted_ind]))
-        plotObj.append(plot(ax, x[sorted_ind],
-                            np.abs(El[sorted_ind]),
-                            yerr=yerr,
-                            **fine_kwargs))
+        _, objs = plotFineExpectVsLvls(ax, runs, __calc_moments=ret, **fine_kwargs)
+        plotObj.extend(objs)
+        
+    return plotObj[0][0].get_xydata(), plotObj
+
+def plotFineExpectVsLvls(ax, runs, *args, **kwargs):
+    """Plots El, Vl vs TOL of @runs, as
+    returned by MIMCDatabase.readRunData()
+    ax is in instance of matplotlib.axes
+    """
+    ax.set_ylabel(r'$E_\ell$')
+    ax.set_yscale('log')
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    fnNorm = kwargs.pop("fnNorm", np.abs)
+    lvls_scale = kwargs.pop('lvls_scale', 1.)
+
+    if "__calc_moments" in kwargs:
+        ret = kwargs.pop("__calc_moments")
+    else:
+        ret = __calc_moments(runs,
+                             seed=kwargs.pop('seed', None),
+                             direction=kwargs.pop('direction', None),
+                             active_only=kwargs.pop('active_only', False),
+                             fnNorm=fnNorm)
+
+    plotObj = []
+    El = ret.central_fine_moments[:, 0]
+    x, sorted_ind = _get_x_axis(ax, ret, kwargs)
+    x = x * lvls_scale
+
+    yerr = None
+    if ret.central_fine_moments.shape[1] > 1:
+        Vl = ret.central_fine_moments[:, 1]
+        yerr = 3*np.sqrt(np.abs(Vl[sorted_ind]/ret.M[sorted_ind]))
+    plotObj.append(plot(ax, x[sorted_ind], np.abs(El[sorted_ind]),
+                        yerr=yerr, *args, **kwargs))
+
 
     return plotObj[0][0].get_xydata(), plotObj
 
@@ -942,8 +993,8 @@ def plotVarVsLvls(ax, runs, *args, **kwargs):
     else:
         ret = __calc_moments(runs,
                              seed=kwargs.pop('seed', None),
-                             direction=kwargs.pop('direction',
-                                                  None),
+                             direction=kwargs.pop('direction', None),
+                             active_only=kwargs.pop('active_only', False),
                              fnNorm=fnNorm)
 
     fine_kwargs = kwargs.pop('fine_kwargs', None)
@@ -957,18 +1008,12 @@ def plotVarVsLvls(ax, runs, *args, **kwargs):
         El4 = ret.central_delta_moments[:, 3]
         yerr = 3*np.sqrt(np.abs(El4[sorted_ind]/ret.M[sorted_ind]))
     plotObj.append(plot(ax, x[sorted_ind], Vl[sorted_ind],
-                        yerr=yerr,
-                        *args, **kwargs))
+                        yerr=yerr, *args, **kwargs))
 
     if fine_kwargs is not None:
-        Vl = ret.central_fine_moments[:, 1]
-        if ret.central_fine_moments.shape[-1] >= 4:
-            El4 = ret.central_fine_moments[:, 3]
-            yerr = 3*np.sqrt(np.abs(El4[sorted_ind]/ret.M[sorted_ind]))
-        plotObj.append(plot(ax, x[sorted_ind],
-                            Vl[sorted_ind],
-                            yerr=yerr,
-                            **fine_kwargs))
+        _, objs = plotFineVarVsLvls(ax, runs, __calc_moments=ret,
+                                    **fine_kwargs)
+        plotObj.extend(objs)
 
     if estimate_kwargs is not None:
         # mdat = np.ma.masked_array(ret.Vl_estimate, np.isnan(Vl_estimate))
@@ -981,6 +1026,40 @@ def plotVarVsLvls(ax, runs, *args, **kwargs):
                             yerr=[med[sorted_ind]-min_vl[sorted_ind],
                                   max_vl[sorted_ind]-med[sorted_ind]],
                             **estimate_kwargs))
+    return plotObj[0][0].get_xydata(), plotObj
+
+@public
+def plotFineVarVsLvls(ax, runs, *args, **kwargs):
+    """Plots El, Vl vs TOL of @runs, as
+    returned by MIMCDatabase.readRunData()
+    ax is in instance of matplotlib.axes
+    """
+    ax.set_ylabel(r'$V_\ell$')
+    ax.set_yscale('log')
+    fnNorm = kwargs.pop("fnNorm", np.abs)
+    lvls_scale = kwargs.pop('lvls_scale', 1.)
+
+    if "__calc_moments" in kwargs:
+        ret = kwargs.pop("__calc_moments")
+    else:
+        ret = __calc_moments(runs,
+                             seed=kwargs.pop('seed', None),
+                             direction=kwargs.pop('direction', None),
+                             active_only=kwargs.pop('active_only', False),
+                             fnNorm=fnNorm)
+
+    plotObj = []
+    Vl = ret.central_fine_moments[:, 1]
+    x, sorted_ind = _get_x_axis(ax, ret, kwargs)
+    x = x * lvls_scale
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    if ret.central_fine_moments.shape[-1] >= 4:
+        El4 = ret.central_fine_moments[:, 3]
+        yerr = 3*np.sqrt(np.abs(El4[sorted_ind]/ret.M[sorted_ind]))
+    plotObj.append(plot(ax, x[sorted_ind], Vl[sorted_ind],
+                        yerr=yerr,
+                        *args, **kwargs))
+    
     return plotObj[0][0].get_xydata(), plotObj
 
 
@@ -1000,11 +1079,10 @@ def plotWorkContribVsLvls(ax, runs, *args, **kwargs):
     else:
         ret = __calc_moments(runs,
                              seed=kwargs.pop('seed', None),
-                             direction=kwargs.pop('direction',
-                                                  None),
+                             direction=kwargs.pop('direction', None),
+                             active_only=kwargs.pop('active_only', False),
                              fnNorm=fnNorm)
-
-    fine_kwargs = kwargs.pop('fine_kwargs', None)
+        
     plotObj = []
     Vl = ret.central_delta_moments[:, 1]
     Vl_fine = ret.central_fine_moments[:, 1]
@@ -1037,8 +1115,8 @@ def plotKurtosisVsLvls(ax, runs, *args, **kwargs):
         ret = kwargs.pop("__calc_moments")
     else:
         ret = __calc_moments(runs, seed=kwargs.pop('seed', None),
-                             direction=kwargs.pop('direction',
-                                                  None),
+                             direction=kwargs.pop('direction', None),
+                             active_only=kwargs.pop('active_only', False),
                              fnNorm=fnNorm)
     x, sorted_ind = _get_x_axis(ax, ret, kwargs)
     x = x * lvls_scale
@@ -1063,8 +1141,8 @@ def plotSkewnessVsLvls(ax, runs, *args, **kwargs):
         ret = kwargs.pop("__calc_moments")
     else:
         ret = __calc_moments(runs, seed=kwargs.pop('seed', None),
-                             direction=kwargs.pop('direction',
-                                                  None),
+                             direction=kwargs.pop('direction', None),
+                             active_only=kwargs.pop('active_only', False),
                              fnNorm=fnNorm)
     x, sorted_ind = _get_x_axis(ax, ret, kwargs)
     x = x * lvls_scale
@@ -1086,6 +1164,7 @@ def plotTimeVsLvls(ax, runs, *args, **kwargs):
     else:
         ret = __calc_moments(runs,
                              seed=kwargs.pop('seed', None),
+                             active_only=kwargs.pop('active_only', False),
                              direction=kwargs.pop('direction', None), fnNorm=fnNorm)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     x, sorted_ind = _get_x_axis(ax, ret, kwargs)
@@ -1110,6 +1189,7 @@ def plotWorkVsLvls(ax, runs, *args, **kwargs):
     else:
         ret = __calc_moments(runs,
                              seed=kwargs.pop('seed', None),
+                             active_only=kwargs.pop('active_only', False),
                              direction=kwargs.pop('direction', None), fnNorm=fnNorm)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     x, sorted_ind = _get_x_axis(ax, ret, kwargs)
@@ -1137,7 +1217,7 @@ def plotTimeVsTOL(ax, runs, *args, **kwargs):
     scale_x = kwargs.pop('scale_x', 1.)
 
     if scale_y_tol2:
-        tol2_scale = lambda TOL: TOL**2
+        tol2_scale = lambda TOL: (TOL*scale_x)**2
         tol2_label = r" $\times \tol^2$"
     else:
         tol2_scale = lambda TOL: 1.
@@ -1147,27 +1227,35 @@ def plotTimeVsTOL(ax, runs, *args, **kwargs):
         ax.set_ylabel('Work estimate' + tol2_label)
         fnTime = lambda r, itr: np.sum(itr.tW * scalar(itr))
         fnMCWork = lambda r, itr: np.max(itr.calcWl())
-    elif fnTime == "real_time":
+    if fnTime == "active-work":
+        ax.set_ylabel('Work estimate' + tol2_label)
+        fnTime = lambda r, itr: np.sum(itr.tW[itr.active_lvls>=0] * scalar(itr))
+        fnMCWork = lambda r, itr: np.max(itr.calcWl()[itr.active_lvls>=0])
+    elif fnTime == "real-time":
         assert min_samples is None
         assert MC_kwargs is None
         ax.set_ylabel('Wall clock time [s]' + tol2_label)
         fnMCWork = lambda r, itr: 0.
         fnTime = lambda r, itr: r.iter_total_times[i]
-    elif fnTime is 'time':
+    elif fnTime == 'time':
         ax.set_ylabel('Running time [s]' + tol2_label)
         fnTime = lambda r, itr: np.sum(itr.tT * scalar(itr))
         fnMCWork = lambda r, itr: np.max(itr.calcTl())
-    elif fnTime == "max_work":
+    elif fnTime == 'active-time':
+        ax.set_ylabel('Running time [s]' + tol2_label)
+        fnTime = lambda r, itr: np.sum(itr.tT[itr.active_lvls>=0] * scalar(itr))
+        fnMCWork = lambda r, itr: np.max(itr.calcTl()[itr.active_lvls>=0])
+    elif fnTime == "max-work":
         assert min_samples is None
         ax.set_ylabel('Work estimate' + tol2_label)
         fnMCWork = lambda r, itr: np.max(itr.calcWl())
         fnTime = fnMCWork
-    elif fnTime == "max_time":
+    elif fnTime == "max-time":
         assert min_samples is None
         ax.set_ylabel('Running time [s]' + tol2_label)
         fnMCWork = lambda r, itr: np.max(itr.calcTl())
         fnTime = fnMCWork
-
+        
     ax.set_xscale('log')
     ax.set_yscale('log')
     ax.set_xlabel(r'\tol')
@@ -1193,7 +1281,7 @@ def plotTimeVsTOL(ax, runs, *args, **kwargs):
            * tol2_scale(itr.TOL)]
           for i, r, itr in enum_iter_i(runs, filteritr)]
     if len(xy) == 0:
-        return np.array([]).reshape(2, 0), []
+       return np.array([]).reshape(2, 0), []
 
     plotObj = []
     TOLs, times = __get_stats(xy)
@@ -1216,7 +1304,10 @@ def plotFirstLvlVsTOL(ax, runs, *args, **kwargs):
     ax is in instance of matplotlib.axes
     """
     lvl_index = kwargs.pop('lvl_index', None)
+    scale_x = kwargs.pop('scale_x', 1.)
     scatter = kwargs.pop('scatter', True)
+    ax.set_xlabel(r'\tol')
+    ax.set_ylabel(r'$\ell_0$')
     ax.set_xscale('log')
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
@@ -1233,7 +1324,6 @@ def plotFirstLvlVsTOL(ax, runs, *args, **kwargs):
                 stats = [np.sum(data[lvl_index == j])
                          for j, data in itr.lvls_sparse_itr()
                          if len(data[lvl_index == j]) > 0]
-            stats = np.array(stats)[itr.active_lvls >= 0]
             summary.append([itr.TOL, np.min(stats)])
 
     summary = np.array(summary)
@@ -1248,20 +1338,22 @@ def plotFirstLvlVsTOL(ax, runs, *args, **kwargs):
 
     from mimclib.plot import _scatter
     if scatter:
-        scatter = _scatter(ax, summary[:, 0], summary[:, 1], *args, **kwargs)
+        scatter = _scatter(ax, scale_x*summary[:, 0], summary[:, 1], *args, **kwargs)
     else:
         ind = np.argsort(summary[:, 0])
-        scatter = plot(ax, summary[ind, 0], summary[ind, 1], *args, **kwargs)
+        scatter = plot(ax, scale_x*summary[ind, 0],
+                       summary[ind, 1], *args, **kwargs)
     return summary, [scatter]
 
 
 @public
-def plotLvlsNumVsTOL(ax, runs, *args, **kwargs):
+def plotLvlsCountVsTOL(ax, runs, *args, **kwargs):
     """Plots L vs TOL of @runs, as
     returned by MIMCDatabase.readRunData()
     ax is in instance of matplotlib.axes
     """
     lvl_index = kwargs.pop('lvl_index', None)
+    scale_x = kwargs.pop('scale_x', 1)
     scatter = kwargs.pop('scatter', True)
     ax.set_xscale('log')
     ax.set_xlabel(r'\tol')
@@ -1269,28 +1361,31 @@ def plotLvlsNumVsTOL(ax, runs, *args, **kwargs):
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
     filteritr = kwargs.pop("filteritr", filteritr_all)
-    summary = []
-    for r in runs:
-        prev = 0
-        prevMax = 0
-        for i in range(0, len(r.iters)):
-            if not filteritr(r, i):
-                continue
-            itr = r.iters[i]
-            if lvl_index is None:
-                stats = [np.sum(data) for _, data in itr.lvls_sparse_itr(prev)]
-            else:
-                stats = [np.sum(data[lvl_index == j])
-                         for j, data in itr.lvls_sparse_itr(prev)
-                         if len(data[lvl_index == j]) > 0]
-            if len(stats) == 0:
-                assert(prev > 0)
-                newMax = prevMax
-            else:
-                newMax = np.maximum(np.max(stats), prevMax)
-            summary.append([itr.TOL, newMax])
-            prev = itr.lvls_count
-            prevMax = newMax
+    summary = [[itr.TOL, np.sum(itr.active_lvls>0)] for _, itr in enum_iter(runs, filteritr)]
+
+    # summary = []
+    # for r in runs:
+    #     prev = 0
+    #     prevMax = 0
+    #     for i in range(0, len(r.iters)):
+    #         if not filteritr(r, i):
+    #             continue
+    #         itr = r.iters[i]
+    #         if lvl_index is None:
+    #             stats = [(np.max(data) if len(data)>0 else 0)
+    #                      for _, data in itr.lvls_sparse_itr(prev)]
+    #         else:
+    #             stats = [np.sum(data[lvl_index == j])
+    #                      for j, data in itr.lvls_sparse_itr(prev)
+    #                      if len(data[lvl_index == j]) > 0]
+    #         if len(stats) == 0:
+    #             assert(prev > 0)
+    #             newMax = prevMax
+    #         else:
+    #             newMax = np.maximum(np.max(stats)-np.min(stats), prevMax)
+    #         summary.append([itr.TOL, newMax])
+    #         prev = itr.lvls_count
+    #         prevMax = newMax
 
     summary = np.array(summary)
 
@@ -1303,10 +1398,12 @@ def plotLvlsNumVsTOL(ax, runs, *args, **kwargs):
     summary = a
 
     if scatter:
-        scatter = _scatter(ax, summary[:, 0], summary[:, 1], *args, **kwargs)
+        scatter = _scatter(ax, scale_x*summary[:, 0],
+                           summary[:, 1].astype(np.int), *args, **kwargs)
     else:
         ind = np.argsort(summary[:, 0])
-        scatter = plot(ax, summary[ind, 0], summary[ind, 1], *args, **kwargs)
+        scatter = plot(ax, scale_x*summary[ind, 0],
+                       summary[ind, 1].astype(np.int), *args, **kwargs)
     return summary, [scatter]
 
 @public
