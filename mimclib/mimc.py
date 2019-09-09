@@ -282,8 +282,8 @@ class MIMCItrData(object):
             return El[self.active_lvls >= 0, ...]
         return El
 
-    def calcVl(self, active_only=False, weighted=True):
-        return self.calcEl(moment=2, active_only=active_only, weighted=weighted)
+    # def calcVl(self, active_only=False, weighted=True):
+    #     return self.calcEl(moment=2, active_only=active_only, weighted=weighted)
 
     # def computedMoments(self):
     #     return self.moments
@@ -955,11 +955,19 @@ max_lvl        = {}
         self.iters[-1].Vl_estimate.fill(np.nan)
         self.iters[-1].stat_error = np.nan
         if self.iters[-1].moments >= 2:
-            act = self.last_itr.active_lvls >= 0
             if self.params.lsq_est:
                 self.iters[-1].Vl_estimate = self._estimateBayesianVl()
             else:
-                self.iters[-1].Vl_estimate[act] = self.fn.Norm(self.all_itr.calcVl()[act])
+                deltaVl = self.fn.Norm(self.last_itr.calcDeltaCentralMoment(moment=2,
+                                                                            weighted=False))
+                fineVl = self.fn.Norm(self.last_itr.calcFineCentralMoment(moment=2,
+                                                                          weighted=False))
+
+                act = self.last_itr.active_lvls == 0
+                self.iters[-1].Vl_estimate[act] = fineVl[act]
+                act = self.last_itr.active_lvls > 0
+                self.iters[-1].Vl_estimate[act] = deltaVl[act]
+            act = self.last_itr.active_lvls >= 0
             self.iters[-1].stat_error = np.inf if np.any(self.last_itr.M[act] == 0) \
                                     else self._Ca * \
                                          np.sqrt(np.sum(self.Vl_estimate[act]
@@ -1082,7 +1090,8 @@ max_lvl        = {}
         while self.cur_start_level < self.last_itr.lvls_count-1:
             to_change = False
             deltaWl = self.last_itr.calcWl()
-            deltaVl = self.fn.Norm(self.last_itr.calcVl(weighted=False))
+            deltaVl = self.fn.Norm(self.last_itr.calcDeltaCentralMoment(moment=2,
+                                                                        weighted=False))
             fineVl = self.fn.Norm(self.last_itr.calcFineCentralMoment(moment=2,
                                                                       weighted=False))
 
