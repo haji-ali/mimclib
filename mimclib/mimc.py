@@ -39,6 +39,17 @@ def printTable(header, rows, bh = '_', bv = '|', min_len=None, underline=True):
     output.extend([f.format(*row) for row in rows])
     return "\n".join(output)
 
+class LoadFromFile(argparse.Action):
+    def __call__ (self, parser, namespace, values, option_string = None):
+        with values as f:
+            contents = f.read()
+
+        data = parser.parse_args(contents.split(), namespace=namespace)
+        for k, v in vars(data).items():
+            if v and k != option_string.lstrip('-'):
+                setattr(namespace, k, v)
+
+
 @public
 class Nestedspace(argparse.Namespace):
     def __setattr__(self, name, value):
@@ -792,6 +803,8 @@ for tolerance smaller than TOL. Not needed if TOLs is provided to doRun.")
                       default=2,
                       help="Minimum element size get_geometric_hl. \
 Not needed if fnHierarchy is provided.")
+
+            add_store('argfile', type=open, action=LoadFromFile)
         return mimcgrp
 
     def output(self, verbose):
