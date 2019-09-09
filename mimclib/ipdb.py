@@ -40,8 +40,12 @@ from IPython.terminal.ipapp import load_default_config
 @magics_class
 class StackEmbeddedMagics(Magics):
     @line_magic
-    def killem(self):
+    def killem(self, *args):
         self.shell.embedded_active = False
+
+    @line_magic
+    def exit(self, *args):
+        sys.exit()
 
     @line_magic
     def stack(self, parameter_s=''):
