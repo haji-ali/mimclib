@@ -1208,7 +1208,6 @@ max_lvl        = {}
             samples_added = False
             while True:
                 # Skip adding an iteration if the previous one is empty
-                timer.tic()
                 # Add new iteration
                 if len(self.iters) == 0:
                     self.iters.append(MIMCItrData(parent=self,
@@ -1282,19 +1281,22 @@ max_lvl        = {}
                     self.last_itr.zero_samples()
                     
                 samples_added = np.any(self._genSamples_zp(todoM)>0) or samples_added
-                self.last_itr.total_time += timer.toc()
                 self.output(verbose=self.params.verbose)
                 self.print_info("------------------------------------------------")
                 if samples_added:
                     if hasattr(self.fn, "ItrDone"):
                         # ItrDone should return true if a new iteration must be added
+                        self.last_itr.total_time = timer.toc(pop=False)
                         add_new_iteration = self.fn.ItrDone()
+                        if add_new_iteration:
+                            timer.toc()  # Discard last tic
+                            timer.tic()
                 if self.params.lsq_est or self.is_itr_tol_satisfied():
                     add_new_level = False
                     break
                 add_new_level = self.bias > self.bias_target(TOL)
                 
-            self.print_info("MIMC iteration for TOL={} took {} seconds".format(TOL, timer.toc()))
+            self.print_info("MIMC iteration for TOL={} took {} seconds".format(TOL, self.last_itr.total_time))
             self.print_info("################################################")
             if less(TOL, finalTOL) and self.total_error_est <= finalTOL:
                 break

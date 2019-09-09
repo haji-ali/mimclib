@@ -91,6 +91,7 @@ def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
             def ItrDone(db=db, r_id=mimcRun.db_data.run_id, r=mimcRun):
                 if r.is_itr_tol_satisfied():   # Only save iterations that have tol satisifed
                     db.writeRunData(r_id, r, iteration_idx=len(r.iters)-1)
+                    return True
             fnItrDone = ItrDone
         else:
             fnItrDone = lambda db=db, r_id=mimcRun.db_data.run_id, r=mimcRun, fn=fnItrDone: \
