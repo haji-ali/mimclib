@@ -703,12 +703,21 @@ class MIMCRun(object):
                 setattr(namespace, self.dest, np.array(values))
 
         def add_store(name, action="store", dest=None, **kwargs):
-            if dest is None:
-                dest = name
+            dest = name if dest is None else dest
             if "default" in kwargs and "help" in kwargs:
                 kwargs["help"] += " (default: {})".format(kwargs["default"])
-            mimcgrp.add_argument(pre + name, dest=dest, action=action,
-                                 **kwargs)
+            mimcgrp.add_argument(pre + name, dest=dest, action=action, **kwargs)
+
+            
+        def add_dict_arg(name, dict_arg, dest=None, **kwargs):
+            dest = name if dest is None else dest
+            class customAction(argparse.Action):
+                def __call__(self, parser, args, values, option_string=None):
+                    setattr(args, self.dest, dict_arg[values])
+            mimcgrp.add_argument(pre + name, dest=dest,
+                                 choices=dict_arg.keys(),
+                                 action=customAction, **kwargs)
+
 
         add_store('ml2r', default=False, action='store_true',
                   help="Enable ML2R. Only For 1 dim, requires 'w'")
@@ -805,6 +814,8 @@ for tolerance smaller than TOL. Not needed if TOLs is provided to doRun.")
 Not needed if fnHierarchy is provided.")
 
             add_store('argfile', type=open, action=LoadFromFile)
+            add_dict_arg('time_func', dict(walltime=time.time, clock=time.clock),
+                         default=time.clock)
         return mimcgrp
 
     def output(self, verbose):
@@ -1199,7 +1210,7 @@ max_lvl        = {}
         self.last_itr.weights[self.last_itr.active_lvls >= 0] = calc_ml2r_weights(alpha, L)
 
     def doRun(self, TOLs=None):
-        timer = Timer()
+        timer = Timer(clock=self.params.time_func)
         self._checkFunctions()
         finalTOL = self.params.TOL
         if TOLs is None:
