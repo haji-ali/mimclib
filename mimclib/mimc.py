@@ -1297,9 +1297,9 @@ max_lvl        = {}
                 self.output(verbose=self.params.verbose)
                 self.print_info("------------------------------------------------")
                 if samples_added:
+                    self.last_itr.total_time = timer.toc(pop=False)
                     if hasattr(self.fn, "ItrDone"):
                         # ItrDone should return true if a new iteration must be added
-                        self.last_itr.total_time = timer.toc(pop=False)
                         add_new_iteration = self.fn.ItrDone()
                         if add_new_iteration:
                             timer.toc()  # Discard last tic
