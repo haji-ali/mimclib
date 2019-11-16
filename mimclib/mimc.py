@@ -1119,7 +1119,7 @@ max_lvl        = {}
             fineVl = self.fn.Norm(self.last_itr.calcFineCentralMoment(moment=2,
                                                                       weighted=False))
 
-            new_start_lvl = self.cur_start_level+1
+
             #sVW_Z = np.sqrt(deltaVl[self.cur_start_level+1]*deltaWl[self.cur_start_level+1])
             sVW_Y = np.sqrt(fineVl[self.cur_start_level+1]*deltaWl[self.cur_start_level+1])
             sVW_X = np.sqrt(fineVl[self.cur_start_level]*deltaWl[self.cur_start_level])
