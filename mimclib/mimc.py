@@ -1124,6 +1124,7 @@ max_lvl        = {}
             sVW_Y = np.sqrt(fineVl[self.cur_start_level+1]*deltaWl[self.cur_start_level+1])
             sVW_X = np.sqrt(fineVl[self.cur_start_level]*deltaWl[self.cur_start_level])
             lhs = sVW_X
+            new_start_lvl = self.cur_start_level+1
             while new_start_lvl < self.last_itr.lvls_count:
                 lhs += np.sqrt(deltaVl[new_start_lvl]*deltaWl[new_start_lvl])
                 sVW_Y = np.sqrt(fineVl[new_start_lvl]*deltaWl[new_start_lvl])
