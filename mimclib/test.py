@@ -103,20 +103,20 @@ def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
     return mimcRun
 
 def RunTest(mimcRun):
-    tStart = time.clock()
+    tStart = time.process_time()
     try:
         mimcRun.doRun()
     except:
         if hasattr(mimcRun.params, "db"):
             db = mimcdb.MIMCDatabase(**__transform_db_args(mimcRun.params.db))
             db.markRunFailed(mimcRun.db_data.run_id,
-                             total_time=time.clock()-tStart)
+                             total_time=time.process_time()-tStart)
         raise   # If you don't want to raise, make sure the following code is not executed
 
     if hasattr(mimcRun.params, "db"):
         db = mimcdb.MIMCDatabase(**__transform_db_args(mimcRun.params.db))
         db.markRunSuccessful(mimcRun.db_data.run_id,
-                             total_time=time.clock()-tStart)
+                             total_time=time.process_time()-tStart)
     return mimcRun
 
 

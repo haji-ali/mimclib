@@ -92,7 +92,7 @@ Bunch = Nestedspace    # Backward compatibility
 
 
 class Timer():
-    def __init__(self, clock=time.clock):
+    def __init__(self, clock=time.process_time):
         self._tics = []
         self._clock = clock
         self.tic()
@@ -814,8 +814,8 @@ for tolerance smaller than TOL. Not needed if TOLs is provided to doRun.")
 Not needed if fnHierarchy is provided.")
 
             add_store('argfile', type=open, action=LoadFromFile)
-            add_dict_arg('time_func', dict(walltime=time.time, clock=time.clock),
-                         default=time.clock)
+            add_dict_arg('time_func', dict(walltime=time.time, clock=time.process_time),
+                         default=time.process_time)
         return mimcgrp
 
     def output(self, verbose):
