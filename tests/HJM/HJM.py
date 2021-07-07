@@ -33,11 +33,11 @@ def hoLeeExample2(inds,t_max=1.0,tau_max=2.0,r0=0.05,sig=0.01,verbose=False):
     return hoLeeExample([[foo[0],foo[1],foo[1]] for foo in inds],t_max=t_max,tau_max=tau_max,r0=r0,sig=sig,verbose=verbose)
 
 def hoLeeExample(inds,t_max=1.0,tau_max=2.0,r0=0.05,sig=0.01,verbose=False):
-    
+
     '''
     Compute the Ho Lee Example in Beck-Tempone-Szepessy-Zouraris
     '''
-    
+
     thi = lambda tau: 0.1*(1-np.exp(-1*tau))
     f0 = lambda tau: r0-sig*sig*0.5*tau*tau+thi(tau)
 
@@ -58,13 +58,13 @@ def hoLeeExample(inds,t_max=1.0,tau_max=2.0,r0=0.05,sig=0.01,verbose=False):
     identifierString += 'r0: %f, vol %f , t_max %f , tau_max %f .'
 
     return multiLevelHjmModel(inds,F,G,U,Psi,drift,vols,f0,t_max=t_max,tau_max=tau_max,identifierString=identifierString,verbose=verbose)
-    
+
 def twoFactorGaussianExample(inds,t_max=1.0,tau_max=3.0,b0=0.0759,b1=-0.0439,k=0.4454,a2=0.5,s1=0.02,s2=0.01,K=0.5,verbose=False):
-    
+
     '''
     Compute the two factor Gaussian Example in Beck-Tempone-Szepessy-Zouraris
     '''
-    
+
 
     f0 = lambda tau: b0+b1*np.exp(-1.0*k*tau)
 
@@ -72,12 +72,12 @@ def twoFactorGaussianExample(inds,t_max=1.0,tau_max=3.0,b0=0.0759,b1=-0.0439,k=0
     G = lambda x: np.fmax(np.exp(-1.0*x)-K)
     Psi = lambda x: 1.0*x
     U = lambda x: 0.0*x
-    
+
     d1 = lambda s: s1*s1*s
     d20 = lambda s: np.exp(-0.5*a2*s)
     d2 = lambda s: 2*s2*s2/a2*d20(s)*(1.0-d20(s))
-    
-    drift = lambda s: d1(s)+d2(s) 
+
+    drift = lambda s: d1(s)+d2(s)
 
     v1 = lambda s: s1*np.ones(np.shape(s))
     v2 = lambda s: s2*d20(s)
@@ -88,19 +88,19 @@ def twoFactorGaussianExample(inds,t_max=1.0,tau_max=3.0,b0=0.0759,b1=-0.0439,k=0
     identifierString += 's1: %f, s2: %f, b0: %f, tau_max: %f, t_max: %f\n'%(s1,s2,b0,tau_max,t_max)
     identifierString += 'k: %f, a2: %f, K: %f, b1: %f'%(k,a2,K,b1)
 
-    return multiLevelHjmModel(inds,F,G,U,Psi,drift,vols,f0,t_max=t_max,tau_max=tau_max,identifierString=identifierString,verbose=verbose)    
+    return multiLevelHjmModel(inds,F,G,U,Psi,drift,vols,f0,t_max=t_max,tau_max=tau_max,identifierString=identifierString,verbose=verbose)
 
 def cCovExp(L,K,n):
     return 2*K*((1-np.exp(-abs(K*L))*((-1)**n))/(K*K+n*n*np.pi*np.pi/L/L))/L
 
 def fourierExample(inds,cfun,L=50.0,tau1=1.0,tau2=2.0,t_max=1.0,verbose=False):
 
-    ts = [time.clock(),]
+    ts = [time.process_time(),]
 
     w = lambda k: np.pi*k/L
     plotN = 200
 
-    # largest values of the discretisation numbers                                                                           
+    # largest values of the discretisation numbers
     N_t = max([foo[0] for foo in inds])
     N_f = max([foo[1] for foo in inds])
 
@@ -116,7 +116,7 @@ def fourierExample(inds,cfun,L=50.0,tau1=1.0,tau2=2.0,t_max=1.0,verbose=False):
 
     if verbose:
         print('W mean and variance: %f, %f'%(np.mean(Wt[-1,:]),np.var(Wt[-1,:])))
-    
+
     consts = np.zeros(N_t)
     ans = np.zeros((N_t,N_f-1))
     bns = np.zeros((N_t,N_f-1))
@@ -137,7 +137,7 @@ def fourierExample(inds,cfun,L=50.0,tau1=1.0,tau2=2.0,t_max=1.0,verbose=False):
         plt.plot(times,ans[:,0],'b-')
         plt.plot(times,bns[:,0],'r-')
         plt.grid(1)
-        
+
 
     zeroterm = lambda tt,tau: cfun(0)**2/2*tt*(tau-0.5*tt)
 
@@ -169,7 +169,7 @@ def fourierExample(inds,cfun,L=50.0,tau1=1.0,tau2=2.0,t_max=1.0,verbose=False):
                 shorts[-1] += bns[row,col]*np.cos(w(k)*times[row])
 
         ax.plot(times,times,shorts,'r-')
-    
+
     # solution of fourier coefficients done
 
     rv = []
@@ -213,7 +213,7 @@ def infDimHjmModel(inds,F,G,U,Psi,f0,kappa,t_max=1.0,tau_max=2.0,identifierStrin
     Solve an infinite-dimensional HJM model, crude example
     '''
 
-    ts = [time.clock(),]
+    ts = [time.process_time(),]
 
     if verbose:
         print('Evaluating the Two Factor Gaussian example.')
@@ -221,7 +221,7 @@ def infDimHjmModel(inds,F,G,U,Psi,f0,kappa,t_max=1.0,tau_max=2.0,identifierStrin
         for ind in inds:
             print(ind)
 
-    # largest values of the discretisation numbers                                                                           
+    # largest values of the discretisation numbers
     N_t = max([foo[0] for foo in inds])
     N_tau_1 = max([foo[1] for foo in inds])
     N_tau_2 = max([foo[2] for foo in inds])
@@ -242,7 +242,7 @@ def infDimHjmModel(inds,F,G,U,Psi,f0,kappa,t_max=1.0,tau_max=2.0,identifierStrin
     times = np.linspace(0,t_max,N_t)
     taus_1 = np.linspace(0,t_max,N_tau_2)
     taus_2 = np.linspace(t_max,tau_max,N_tau_1)
-    
+
     taus = np.concatenate((taus_1[:-1],taus_2))
     tauhash = hash(taus)
 
@@ -263,7 +263,7 @@ def infDimHjmModel(inds,F,G,U,Psi,f0,kappa,t_max=1.0,tau_max=2.0,identifierStrin
             print('Generating the cholesky factorisation')
         covMat = expCovar(taus,kappa,chol=1)
         infDimHjmModel.chols[tauhash] = 1.0*covMat
-        
+
 
     covMat = expCovar(taus,kappa,chol=1)
 
@@ -272,7 +272,7 @@ def infDimHjmModel(inds,F,G,U,Psi,f0,kappa,t_max=1.0,tau_max=2.0,identifierStrin
     for jj in range(1,len(Ws)):
         Ws[jj,:] = Ws[jj-1,:] + np.sqrt(dt)*np.dot(covMat,sp.randn(len(taus)))
 
-    ts.append(time.clock())
+    ts.append(time.process_time())
 
     if verbose:
         print('Mesh generations and initialisations done in %d seconds'%(ts[-1]-ts[-2]))
@@ -301,7 +301,7 @@ def infDimHjmModel(inds,F,G,U,Psi,f0,kappa,t_max=1.0,tau_max=2.0,identifierStrin
             ax.set_xlabel('$t$')
             ax.set_ylabel('$\\tau$')
             ax.set_zlabel('$f (\\tau, t)$')
-        # Time stepping 
+        # Time stepping
         lstar = 0
         for j in range(1,len(f_eff)):
             if verbose:
@@ -349,7 +349,7 @@ def infDimHjmModel(inds,F,G,U,Psi,f0,kappa,t_max=1.0,tau_max=2.0,identifierStrin
             print('The absurd additive term equals %f'%(weirdTerm,))
         rv[-1] *= underlying
         rv[-1] += weirdTerm
-        ts.append(time.clock())
+        ts.append(time.process_time())
         if verbose:
             print('The quantity of interest is %f'%(rv[-1]))
             print('Time spent on the level: %d seconds'%(ts[-1]-ts[-2]))
@@ -360,12 +360,12 @@ def infDimHjmModel(inds,F,G,U,Psi,f0,kappa,t_max=1.0,tau_max=2.0,identifierStrin
     return rv
 
 def multiLevelHjmModel(inds,F,G,U,Psi,drift,vols,f0,t_max=1.0,tau_max=2.0,identifierString='HJM Model',verbose=False,maxLev=30):
-    
+
     '''
     Template to solve HJM type problems
     '''
 
-    ts = [time.clock(),]
+    ts = [time.process_time(),]
 
     if verbose:
         print('Evaluating the Two Factor Gaussian example.')
@@ -380,7 +380,7 @@ def multiLevelHjmModel(inds,F,G,U,Psi,drift,vols,f0,t_max=1.0,tau_max=2.0,identi
 
     if N_t+max(N_tau_1,N_tau_2) > maxLev:
         raise MemoryError('Asking for exceptionally refined solution!')
-    
+
 
     N_t = 2**(N_t)+1
     N_tau_1 = 2**(N_tau_1)+1
@@ -396,7 +396,7 @@ def multiLevelHjmModel(inds,F,G,U,Psi,drift,vols,f0,t_max=1.0,tau_max=2.0,identi
     taus_2 = np.linspace(t_max,tau_max,N_tau_1)
 
     taus = np.concatenate((taus_1[:-1],taus_2))
-    
+
     dt = times[1]-times[0]
     Ws = []
     for foo in range(len(vols)):
@@ -414,11 +414,11 @@ def multiLevelHjmModel(inds,F,G,U,Psi,drift,vols,f0,t_max=1.0,tau_max=2.0,identi
 
     rv = []
 
-    ts.append(time.clock())
+    ts.append(time.process_time())
 
     if verbose:
         print('Mesh generations and initialisations done in %d seconds'%(ts[-1]-ts[-2]))
-    
+
     for ind in inds:
         if verbose:
             print('Evaluating the following index:')
@@ -488,7 +488,7 @@ def multiLevelHjmModel(inds,F,G,U,Psi,drift,vols,f0,t_max=1.0,tau_max=2.0,identi
             print('The absurd additive term equals %f'%(weirdTerm,))
         rv[-1] *= underlying
         rv[-1] += weirdTerm
-        ts.append(time.clock())
+        ts.append(time.process_time())
         if verbose:
             print('The quantity of interest is %f'%(rv[-1]))
             print('Time spent on the level: %d seconds'%(ts[-1]-ts[-2]))
@@ -499,11 +499,11 @@ def multiLevelHjmModel(inds,F,G,U,Psi,drift,vols,f0,t_max=1.0,tau_max=2.0,identi
     return rv
 
 def hoLeeExample(inds,t_max=1.0,tau_max=2.0,r0=0.05,sig=0.01,verbose=False):
-    
+
     '''
     Compute the Ho Lee Example in Beck-Tempone-Szepessy-Zouraris
     '''
-    
+
     thi = lambda tau: 0.1*(1-np.exp(-1*tau))
     f0 = lambda tau: r0-sig*sig*0.5*tau*tau+thi(tau)
 
@@ -546,7 +546,7 @@ def hoLeeExample(inds,t_max=1.0,tau_max=2.0,r0=0.05,sig=0.01,verbose=False):
         plt.grid(1)
 
     rv = []
-    
+
     for ind in inds:
         if verbose:
             print('Evaluating the following index:')
@@ -611,7 +611,7 @@ def hoLeeExample(inds,t_max=1.0,tau_max=2.0,r0=0.05,sig=0.01,verbose=False):
         rv[-1] *= underlying
         if verbose:
             print('The quantity of interest is %f'%(rv[-1]))
-    
+
     return rv
 
 def infExample2(inds):
@@ -619,7 +619,7 @@ def infExample2(inds):
     return infDimTest(inp)
 
 def rateTest2D(fun=infExample2,Nref=7,M=100,r0=0.05,sig=0.01,weaks=[1,1],strongs=[1,1]):
-    
+
     """
     Test the convergence rates in two different dimensions.
     """
@@ -633,7 +633,7 @@ def rateTest2D(fun=infExample2,Nref=7,M=100,r0=0.05,sig=0.01,weaks=[1,1],strongs
     plotYWeakE = []
 
     plotRate = lambda ells,rate: 2**(np.array(ells)*(-1.0*rate))
-    
+
     for ell in plotX:
         sample = [fun([[ell,Nref],[ell-1,Nref]]) for foo in range(M)]
         sample = [abs(foo[1]-foo[0]) for foo in sample]
@@ -759,14 +759,14 @@ def testcude(inds,L=10.0,tau1=1.0,tau2=2.0,verbose=False,ret=0,plot=False):
                 ans[row,col] -= c(k)*c(k)*t/w(k)
                 bns[row,col] -= c(k)*c(k)*t/w(k)
 
-    # drift part done                                                                                                                                                                                 
+    # drift part done
     for col in range(len(ans[0])):
         k = col+1
         for row in range(len(ans)):
             t = times[row]
             ans[row,col] += c(k)*Ws[row,col+1]
             bns[row,col] += c(k)*Ws[row,col+1]
-            #ans[row,col] += Ws[row,col+1]*c(k) 
+            #ans[row,col] += Ws[row,col+1]*c(k)
 
     if plot:
         fig=plt.figure()
@@ -788,7 +788,7 @@ def testcude(inds,L=10.0,tau1=1.0,tau2=2.0,verbose=False,ret=0,plot=False):
                 shorts[-1] += bns[row,col-1]*ck(col,t)
             ax.plot(t*np.ones(np.shape(plotx)),plotx,ploty,'b-')
         ax.plot(times,times,shorts,'r-')
-            
+
 
     # stochastic bit done
     for col in range(len(ans[0])):
@@ -857,18 +857,18 @@ def testFourierConvergence():
     M = 100
 
     #samples = [fourierExample(inputList,c,L=L) for m in range(M)]
-    
+
     N1=10
     N2=10
 
     rate1 =  np.array([fourierExample([[5,foo] for foo in range(1,N1)],c) for m in range(100)])
     weakrate1 = np.mean(np.abs(np.diff(rate1,axis=1)),axis=0)
     strongrate1 = np.mean(np.diff(rate1,axis=1)**2,axis=0)
-    
+
     rate2 =  np.array([fourierExample([[foo,5] for foo in range(1,N2)],c) for m in range(100)])
     weakrate2 = np.mean(np.abs(np.diff(rate2,axis=1)),axis=0)
     strongrate2 = np.mean(np.diff(rate2,axis=1)**2,axis=0)
-    
+
     plt.figure()
     plt.semilogy(range(1,N1-1),weakrate1)
     plt.grid(1)
@@ -882,7 +882,7 @@ def testFourierConvergence():
     plt.xlabel('$log_2 N_f$')
     plt.ylabel('$E (g-\overline{g})^2$')
     plt.savefig('nfstrong.pdf')
-    
+
     plt.figure()
     plt.semilogy(range(1,N2-1),weakrate2)
     plt.grid(1)
@@ -919,5 +919,3 @@ N=9
 #plt.xlabel('$N_%s$'%(char,))
 #plt.ylabel('Variance')
 #plt.savefig('strongerr%d.pdf'%(onum,))
-
-

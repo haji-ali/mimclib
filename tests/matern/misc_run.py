@@ -88,7 +88,7 @@ class MyRun:
             return
 
         import time
-        tStart = time.clock()
+        tStart = time.process_time()
         # estimate rates
         self.d_err_rates, \
             s_fit_rates = misc.estimate_misc_error_rates(d=run.params.min_dim,
@@ -111,9 +111,9 @@ class MyRun:
         else:
             s_err_rates = []
 
-        tEnd_rates = time.clock() - tStart
+        tEnd_rates = time.process_time() - tStart
         ######### Update
-        tStart = time.clock()
+        tStart = time.process_time()
         self.profCalc = setutil.MISCProfCalculator(self.d_err_rates +
                                                    self.d_work_rates,
                                                    s_err_rates)
