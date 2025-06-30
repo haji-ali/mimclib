@@ -20,14 +20,13 @@ def _md5(string):
     return hashlib.md5(string.encode()).hexdigest()
 
 def _pickle(obj, use_dill=False):
-    import MySQLdb
     with io.BytesIO() as f:
         if use_dill:
             dill.dump(obj, f, protocol=3)
         else:
             pickle.dump(obj, f, protocol=3)
         f.seek(0)
-        return MySQLdb.Binary(f.read())
+        return f.read()
 
 
 def _unpickle(obj, use_dill=False):
