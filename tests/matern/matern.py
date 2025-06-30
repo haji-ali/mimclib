@@ -145,7 +145,7 @@ if __name__=='__main__':
     params.h0inv = 3
     params.beta = 2
 
-    arrY = np.array([[1,1,1,1], [1,1,1,1]], dtype=np.float)
+    arrY = np.array([[1,1,1,1], [1,1,1,1]], dtype=float)
     SField_Matern.Init()
     output = np.zeros(len(arrY))
     sf = SField_Matern(params)

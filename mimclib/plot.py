@@ -495,7 +495,7 @@ def plotDirections(ax, runs, fnPlot,
     if directions is None:
         default_max_dims = 5
         max_dim = np.max([np.max(r.last_itr.lvls_max_dim()) for r in runs])
-        directions = np.eye(np.minimum(default_max_dims, max_dim), dtype=np.int).tolist()
+        directions = np.eye(np.minimum(default_max_dims, max_dim), dtype=int).tolist()
         cur = np.array(directions[0])
         for i in range(1, len(directions)):
             cur += np.array(directions[i])
@@ -1262,7 +1262,7 @@ def plotTimeVsTOL(ax, runs, *args, **kwargs):
 
     scalar = lambda itr: 1
     if min_samples is not None:
-        new_samples = lambda itr: np.maximum(np.float(min_samples),
+        new_samples = lambda itr: np.maximum(float(min_samples),
                                              mimc._calcTheoryM(
                                                  itr.TOL,
                                                  active_lvls=itr.active_lvls,
@@ -1399,11 +1399,11 @@ def plotLvlsCountVsTOL(ax, runs, *args, **kwargs):
 
     if scatter:
         scatter = _scatter(ax, scale_x*summary[:, 0],
-                           summary[:, 1].astype(np.int), *args, **kwargs)
+                           summary[:, 1].astype(int), *args, **kwargs)
     else:
         ind = np.argsort(summary[:, 0])
         scatter = plot(ax, scale_x*summary[ind, 0],
-                       summary[ind, 1].astype(np.int), *args, **kwargs)
+                       summary[ind, 1].astype(int), *args, **kwargs)
     return summary, [scatter]
 
 @public
@@ -1480,7 +1480,7 @@ def plotErrorsPP(ax, runs, label_fmt='${TOL}$', *args, **kwargs):
                        itr.TOL == tol])
     x = x_data - np.mean(x_data, axis=0)
     try:
-        x = x.astype(np.float)
+        x = x.astype(float)
         if len(x.shape) != 1:
             raise Exception("Not correct size")
     except:

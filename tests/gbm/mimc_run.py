@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 This file contains an example of a mimclib run.
 The example solves a geometric Brownian motion SDE
@@ -65,7 +66,7 @@ class CustomClass(mimclib.mimc.custom_obj):
 
 def mySampleQoI(run, inds, M):
     M = np.minimum(M, 1000)
-    meshes = (run.params.qoi_T/run.fn.Hierarchy(inds)).reshape(-1).astype(np.int)
+    meshes = (run.params.qoi_T/run.fn.Hierarchy(inds)).reshape(-1).astype(int)
     maxN = np.max(meshes)
 
     tStart = time.process_time()
@@ -108,8 +109,6 @@ def initRun(run):
 
 if __name__ == "__main__":
     import mimclib.test
-    from mimclib import ipdb
-    ipdb.set_excepthook()
     import sys
     mimclib.test.RunStandardTest(fnSampleLvl=mySampleQoI,
                                  fnAddExtraArgs=addExtraArguments,

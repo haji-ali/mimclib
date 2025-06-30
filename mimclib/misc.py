@@ -87,7 +87,7 @@ class MISCSampler(object):
         # structure for consistency with other functions in set_util
 
         # import itertools
-        # pattern = np.array([s for s in itertools.product(*[range(1,j+1) for j in m])], dtype=np.int).transpose()
+        # pattern = np.array([s for s in itertools.product(*[range(1,j+1) for j in m])], dtype=int).transpose()
         # 1+np.rollaxis(np.indices(m), 0, len(m)+1).reshape(-1, len(m)).transpose()
         N = len(beta)
         if N == 0:
@@ -324,7 +324,7 @@ def lev2knots_doubling(i):
     # See LICENSE.txt for license
     # ----------------------------------------------------
     scalar = np.isscalar(i)
-    i = np.array([i] if scalar else i, dtype=np.int)
+    i = np.array([i] if scalar else i, dtype=int)
     m = 2 ** (i-1)+1
     m[i==1] = 1
     m[i==0] = 0

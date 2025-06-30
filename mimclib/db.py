@@ -388,7 +388,7 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
         from . import mimc
         import re
         lstruns = []
-        run_ids = np.array(run_ids).astype(np.int).reshape(-1).tolist()
+        run_ids = np.array(run_ids).astype(int).reshape(-1).tolist()
         if len(run_ids) == 0:
             return lstruns
 
@@ -492,7 +492,7 @@ ORDER BY dr.run_id, dr.iteration_idx
         params = []
         if done_flag is not None:
             qs.append('done_flag in ?')
-            params.append(np.array(done_flag).astype(np.int).reshape(-1).tolist())
+            params.append(np.array(done_flag).astype(int).reshape(-1).tolist())
         if tag is not None:
             qs.append('tag LIKE ? ')
             params.append(tag)
@@ -548,7 +548,7 @@ UPDATE tbl_iters SET exact_error = ? WHERE iter_id = ?''',
             return 0
         with self.connect() as cur:
             cur.execute("DELETE from tbl_runs where run_id in ?",
-                        [np.array(run_ids).astype(np.int).reshape(-1).tolist()])
+                        [np.array(run_ids).astype(int).reshape(-1).tolist()])
             return cur.getRowCount()
 
 def export_db(tag, from_db, to_db, verbose=False):

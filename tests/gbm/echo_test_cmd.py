@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 import numpy as np
 import argparse
 
@@ -30,13 +30,13 @@ if __name__ == "__main__":
     base += " ".join(unknowns)
 
     if args.tries == 0:
-        cmd_single = "python " + base + " -mimc_verbose 10 -db_tag {tag} "
+        cmd_single = "./" + base + " -mimc_verbose 10 -db_tag {tag} "
         print(cmd_single.format(seed=0, TOL=0.001, tag=args.db_tag))
     else:
-        cmd_multi = "python " + base + \
+        cmd_multi = "./ " + base + \
                     " -mimc_verbose 0 -db -db_tag {tag} -db_engine sqlite -db_name mimc.sqlite "
         #TOLs = 0.05*np.sqrt(2.)**-np.arange(0., 21.)
         TOL = 1e-7
         for i in range(0, args.tries):
-            print cmd_multi.format(tag=args.db_tag, TOL=TOL,
-                                       seed=np.random.randint(2**32-1))
+            print(cmd_multi.format(tag=args.db_tag, TOL=TOL,
+                                   seed=np.random.randint(2**32-1)))

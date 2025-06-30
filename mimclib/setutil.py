@@ -333,7 +333,7 @@ class VarSizeList(object):
         __lib__.VarSizeList_to_matrix(self._handle, ij, len(ij), data,
                                       len(data))
         # Partition data based on sizes
-        s = np.hstack((np.array([0], dtype=np.int), np.cumsum(sizes, dtype=np.int)))
+        s = np.hstack((np.array([0], dtype=int), np.cumsum(sizes, dtype=int)))
         ind = ij[1::2]
         return [data[s[i]:s[i+1]] for i in range(0, len(s)-1)],\
             [ind[s[i]:s[i+1]] for i in range(0, len(s)-1)]
@@ -482,7 +482,7 @@ class VarSizeList(object):
             assert(len(profits) == len(self))
             seedLookahead = max_dim-self.max_dim()
             new_handle = __lib__.VarSizeList_expand_set(self._handle,
-                                                        np.array(profits, dtype=np.float),
+                                                        np.array(profits, dtype=float),
                                                         len(profits),
                                                         max_added,
                                                         seedLookahead)
@@ -514,7 +514,7 @@ class ProfCalculator(object):
     #     import ctypes as ct
     #     mem_prof = ct.POINTER(ct.c_double)()
     #     new = __lib__.GetIndexSet(None, self._handle,
-    #                               np.float(max_prof), ct.byref(mem_prof))
+    #                               float(max_prof), ct.byref(mem_prof))
     #     indSet = VarSizeList(_handle=new, min_dim=self.d)
     #     try:
     #         count = len(indSet)
@@ -535,12 +535,12 @@ class MISCProfCalculator(ProfCalculator):
         self.max_dim = len(d_rates) + len(s_err_rates)
         self._handle = __lib__.CreateMISCProfCalc(len(d_rates),
                                                   len(s_err_rates),
-                                                  np.array(d_rates, dtype=np.float),
-                                                  np.array(s_err_rates, dtype=np.float))
+                                                  np.array(d_rates, dtype=float),
+                                                  np.array(s_err_rates, dtype=float))
 class MIProfCalculator(ProfCalculator):
     def __init__(self, dexp, xi, sexp, mul=1):
         self._handle = __lib__.CreateMIProfCalc(len(dexp),
-                                                np.array(dexp, dtype=np.float),
+                                                np.array(dexp, dtype=float),
                                                 xi, sexp, mul)
 
 class MIProjProfCalculator(ProfCalculator):
@@ -556,8 +556,8 @@ class TDFTProfCalculator(ProfCalculator):
         assert len(td_w) == len(ft_w), "Argument mismatch"
         self.max_dim = len(td_w)
         self._handle = __lib__.CreateTDFTProfCalc(len(td_w),
-                                                  np.array(td_w, dtype=np.float),
-                                                  np.array(ft_w, dtype=np.float))
+                                                  np.array(td_w, dtype=float),
+                                                  np.array(ft_w, dtype=float))
 
 class TDHCProfCalculator(ProfCalculator):
     def __init__(self, td_w=None, hc_w=None):
@@ -566,8 +566,8 @@ class TDHCProfCalculator(ProfCalculator):
         assert len(td_w) == len(hc_w), "Argument mismatch"
         self.max_dim = len(td_w)
         self._handle = __lib__.CreateTDHCProfCalc(len(td_w),
-                                                  np.array(td_w, dtype=np.float),
-                                                  np.array(hc_w, dtype=np.float))
+                                                  np.array(td_w, dtype=float),
+                                                  np.array(hc_w, dtype=float))
 
 @public
 def TensorGrid(m, base=1, count=None):
@@ -608,13 +608,13 @@ class Tree(object):
             self._handle = None
 
     def add_node(self, value, data, eps=1e-14):
-        value = np.array(value, dtype=np.float)
+        value = np.array(value, dtype=float)
         prev_added = __lib__.Tree_add_node(self._handle, value, len(value), data, eps)
         assert(not prev_added)
 
     def find(self, value, eps=1e-14, remove=False):
         data = ct.c_double()
-        value = np.array(value, dtype=np.float)
+        value = np.array(value, dtype=float)
         found = __lib__.Tree_find(self._handle, value, len(value), ct.byref(data), remove, eps)
         if found:
             return data.value

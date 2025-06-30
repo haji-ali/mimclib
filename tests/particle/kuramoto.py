@@ -185,7 +185,7 @@ class SField_Kuramoto(object):
             self.P = self.h0[0]*self.beta[0]**np.array(ind[:, 0], dtype=np.uint32)
             self.P *= self.h0[1]*self.beta[1]**np.array(ind[:, 1], dtype=np.uint32)
             self.N = self.h0[2]*self.beta[2]**np.array(ind[:, 2], dtype=np.uint32)
-            self.mods = np.array(mods, dtype=np.float)
+            self.mods = np.array(mods, dtype=float)
             PN, I = unique_rows(np.vstack((self.P, self.N)).transpose(),
                                 return_inverse=True)
             self.P = PN[:, 0].copy()

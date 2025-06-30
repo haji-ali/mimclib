@@ -124,7 +124,7 @@ def _calcTheoryM(TOL, theta, Vl, Wl, active_lvls, ceil=True, minM=1,
         M[np.logical_not(act)] = 0
 
     if ceil:
-        M = np.ceil(M).astype(np.int)
+        M = np.ceil(M).astype(int)
     return M
 
 
@@ -213,7 +213,7 @@ Possible problem in computing sums.".format(moment, np.min(val)))
 
 def _expand(b, i, shape):
     assert(len(b) == shape[i])
-    b_shape = np.ones(len(shape), dtype=np.int)
+    b_shape = np.ones(len(shape), dtype=int)
     b_shape[i] = len(b)
     b_reps = list(shape)
     b_reps[i] = 1
@@ -238,7 +238,7 @@ class MIMCItrData(object):
         self.psums_fine = None
         self.tT = np.zeros(0)      # Time of lvls
         self.tW = np.zeros(0)      # Time of lvls
-        self.M = np.zeros(0, dtype=np.int)      # Number of samples in each lvl
+        self.M = np.zeros(0, dtype=int)      # Number of samples in each lvl
         self.bias = np.inf           # Approximation of the discretization error
         self.stat_error = np.inf     # Sampling error (based on M)
         self.exact_error = np.nan    # Sampling error (based on M)
@@ -337,13 +337,13 @@ class MIMCItrData(object):
 
     def calcTl(self):
         idx = self.M != 0
-        val = np.zeros_like(self.M, dtype=np.float)
+        val = np.zeros_like(self.M, dtype=float)
         val[idx] = self.tT[idx] / self.M[idx]
         return val
 
     def calcWl(self):
         idx = self.M != 0
-        val = np.zeros_like(self.M, dtype=np.float)
+        val = np.zeros_like(self.M, dtype=float)
         val[idx] = self.tW[idx] / self.M[idx]
         return val
 
@@ -1012,7 +1012,7 @@ max_lvl        = {}
         self.update_ml2r_weights()
         if todoM is None:
             # TODO: Allow for array todoM
-            todoM = np.ones(self.last_itr.lvls_count, dtype=np.int) * self.params.M0[0]
+            todoM = np.ones(self.last_itr.lvls_count, dtype=int) * self.params.M0[0]
         return np.maximum(self.last_itr.M, todoM)
         # newTodoM = self.params.M0
         # if self.params.M0_coeff > 0:
@@ -1027,7 +1027,7 @@ max_lvl        = {}
          
     def _genSamples_zp(self, totalM):
         totalM = totalM.copy()
-        done = np.zeros(len(totalM), dtype=np.int)
+        done = np.zeros(len(totalM), dtype=int)
         for i in range(0, self.params.zero_protection+1):
             done += self._genSamples(totalM)
             ind = done>0
@@ -1429,21 +1429,21 @@ def expand_delta(lvl):
     and x to an array of 1 and -1.
 
     """
-    lvl = np.array(lvl, dtype=np.int)
+    lvl = np.array(lvl, dtype=int)
     seeds = list()
     for i in range(0, lvl.shape[0]):
         if lvl[i] == 0:
             seeds.append([0])
         else:
             seeds.append([0, 1])
-    inds = np.array(list(itertools.product(*seeds)), dtype=np.int)
+    inds = np.array(list(itertools.product(*seeds)), dtype=int)
     mods = (2 * np.sum(lvl) % 2 - 1) * (2 * (np.sum(inds, axis=1) % 2) - 1)
     return mods, np.tile(lvl, (inds.shape[0], 1)) - inds
 
 
 @public
 def get_geometric_hl(lvls, h0inv, beta):
-    return beta**(-np.array(lvls, dtype=np.float))/h0inv
+    return beta**(-np.array(lvls, dtype=float))/h0inv
 
 
 @public
@@ -1511,7 +1511,7 @@ def default_sample_all(lvls, M, moments, fnSample, fnWorkModel=None,
     lvls_count = len(lvls)
     psums_delta = np.empty(lvls_count, dtype=object)
     psums_fine = np.empty(lvls_count, dtype=object)
-    calcM = np.zeros(lvls_count, dtype=np.int)
+    calcM = np.zeros(lvls_count, dtype=int)
     total_time = np.zeros(lvls_count)
     total_work = np.zeros(lvls_count)
     if fnWorkModel is not None:
@@ -1562,7 +1562,7 @@ def default_sample_all_sums(lvls, M, moments, fnSampleSums,
     lvls_count = len(lvls)
     psums_delta = np.empty(lvls_count, dtype=object)
     psums_fine = np.empty(lvls_count, dtype=object)
-    calcM = np.zeros(lvls_count, dtype=np.int)
+    calcM = np.zeros(lvls_count, dtype=int)
     total_time = np.zeros(lvls_count)
     total_work = np.zeros(lvls_count)
     if fnWorkModel is not None:

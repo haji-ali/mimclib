@@ -653,7 +653,7 @@ class MIWProjSampler(object):
 
 @public
 def sample_arcsine_pts(N_per_basis, bases_indices, min_dim, interval=(-1, 1)):
-    N_done = np.ceil(N_per_basis).astype(np.int)
+    N_done = np.ceil(N_per_basis).astype(int)
     N = np.sum(N_done)
     max_dim = int(np.maximum(min_dim, bases_indices.max_dim()))
     X_temp = (np.cos(np.pi * np.random.rand(N, max_dim)) + 1) / 2
@@ -701,7 +701,7 @@ def td_basis_from_level(d, beta):
 @public
 def pair_basis_from_level(beta):
     # beta is zero indexed
-    max_deg = 1 + 2*np.array(beta, dtype=np.int)
+    max_deg = 1 + 2*np.array(beta, dtype=int)
     prev_deg = np.maximum(0, max_deg - 2)
     l = len(beta)
     return list(itertools.product(*[np.arange(prev_deg[i], max_deg[i])
@@ -713,7 +713,7 @@ def default_samples_count(basis, C=2):
     if m == 1:
         return np.array([int(2*C)])
     else:
-        return np.ones(len(basis), dtype=np.float) * C * np.log2(m+1)
+        return np.ones(len(basis), dtype=float) * C * np.log2(m+1)
 
 @public
 def chebyshev_polynomials(Xtilde, N, interval=(-1,1)):

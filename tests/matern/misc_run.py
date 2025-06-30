@@ -69,7 +69,7 @@ class MyRun:
         if problem_arg == 1:
             N_per_ind[1:] /= 2
         _, k_ind = np.unique(np.sum(indSet, axis=1), return_inverse=True)
-        k_of_N = np.repeat(k_ind, N_per_ind.astype(np.int))[:N]
+        k_of_N = np.repeat(k_ind, N_per_ind.astype(int))[:N]
         # N_of_k = [j+np.arange(0, i, dtype=np.uint) for i, j in
         #           zip(N_per_ind, np.hstack((np.array([0],
         #                                              dtype=np.uint),

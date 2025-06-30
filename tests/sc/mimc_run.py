@@ -64,8 +64,8 @@ class MyRun:
         self.func = lambda inds, M, r=run: fn[run.params.qoi_func-1](r, inds, M)
 
         np.random.seed(run.params.qoi_seed)
-        run.params.qoi_w = 1./np.arange(1.,run.params.qoi_dim+1, dtype=np.float)#np.random.random(size=run.params.qoi_dim)
-        run.params.qoi_c = np.arange(1,run.params.qoi_dim+1, dtype=np.float) #np.random.random(size=run.params.qoi_dim)
+        run.params.qoi_w = 1./np.arange(1.,run.params.qoi_dim+1, dtype=float)#np.random.random(size=run.params.qoi_dim)
+        run.params.qoi_c = np.arange(1,run.params.qoi_dim+1, dtype=float) #np.random.random(size=run.params.qoi_dim)
         run.params.qoi_c *= b[run.params.qoi_func-1] / np.sum(run.params.qoi_c)
 
         run.params.qoi_c = np.array([2.71,0.16,3.42,2.71])

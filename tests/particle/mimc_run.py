@@ -26,12 +26,12 @@ class ParticleField(object):
 
     def SampleQoI(self, run, inds, M):
         M = np.minimum(M, 10000)
-        meshes = (1./run.fn.Hierarchy(inds)).astype(np.int)
+        meshes = (1./run.fn.Hierarchy(inds)).astype(int)
         import time
         tStart = time.process_time()
         Ps = meshes[:, 0]
         Ns = meshes[:, 1] if run.params.min_dim == 2 \
-                          else (4*meshes[:, 0]/run.params.h0inv[0]).astype(np.int)
+                          else (4*meshes[:, 0]/run.params.h0inv[0]).astype(int)
         samples = kuramoto.SampleKuramoto(self.gen, Ns=Ns, Ps=Ps, M=M,
                                           T=run.params.qoi_T,
                                           K=run.params.qoi_K,
