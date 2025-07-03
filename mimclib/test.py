@@ -73,8 +73,8 @@ def CreateStandardTest(fnSampleLvl=None, fnSampleAll=None,
                       fn(mimcRun, lvls, M, moments)
         mimcRun.setFunctions(fnSampleAll=fnSampleAll)
 
-    if not hasattr(mimcRun.params, 'qoi_seed'):
-        mimcRun.params.qoi_seed = np.random.randint(2**32-1)
+    # if not hasattr(mimcRun.params, 'qoi_seed'):
+    #     mimcRun.params.qoi_seed = np.random.randint(2**32-1)
 
     if fnInit is not None:
         fnInit(mimcRun)

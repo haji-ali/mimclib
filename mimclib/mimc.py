@@ -5,6 +5,7 @@ from __future__ import print_function
 import time
 import copy
 import gc
+import math
 import numpy as np
 import itertools
 import warnings
@@ -85,7 +86,7 @@ class Nestedspace(argparse.Namespace):
         return self.__dict__[key]
 
     def get(self, key, default=None):
-        return self.key if hasattr(self, key) else default
+        return getattr(self, key) if hasattr(self, key) else default
 
 
 Bunch = Nestedspace    # Backward compatibility
@@ -188,9 +189,9 @@ def compute_central_moment(psums, M, moment):
     pn = np.array([n])
     val = (raw[:, 0]**pn) * (-1)**n
     # From http://mathworld.wolfram.com/CentralMoment.html
-    nfact = np.math.factorial(n)
+    nfact = math.factorial(n)
     for k in range(1, moment+1):
-        nchoosek = nfact / (np.math.factorial(k) * np.math.factorial(n-k))
+        nchoosek = nfact / (math.factorial(k) * math.factorial(n-k))
         val +=  (raw[:, k-1] * raw[:, 0]**(pn-k)) * nchoosek * (-1)**(n-k)
 
     if moment % 2 == 1:
@@ -439,7 +440,7 @@ class MIMCItrData(object):
         if end is None:
             end = self.lvls_count
         assert(end <= self.lvls_count)
-        for i, item in enumerate(self.dense_itr(start, end, min_dim=min_dim)):
+        for i, item in enumerate(self.lvls_sparse_itr(start, end)):
             if not active_only or self.active_lvls[i] >= 0:
                 yield item
 
@@ -785,7 +786,7 @@ Not needed if -lsq_est is False.")
             add_store('max_TOL', type=float,
                       help="The (approximate) tolerance for \
 the first iteration. Not needed if TOLs is provided to doRun.")
-            add_store('M0', nargs='+', type=int, default=np.array([1]),
+            add_store('M0', nargs='+', type=int, default=np.array([10], dtype=int),
                       action=Store_as_array,
                       help="Initial number of samples used to estimate the \
 sample variance on levels when not using the Bayesian estimators. \

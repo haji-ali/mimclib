@@ -227,8 +227,8 @@ CREATE TABLE IF NOT EXISTS tbl_runs (
     done_flag            INTEGER NOT NULL,
     totalTime               REAL,
     tag                   VARCHAR(128) NOT NULL,
-    params                mediumblob,
-    fn                    mediumblob,
+    params                blob,
+    fn                    blob,
     comment               TEXT
 );
 CREATE VIEW vw_runs AS SELECT run_id, creation_date, TOL, done_flag, tag, totalTime, comment FROM tbl_runs;
@@ -242,8 +242,8 @@ CREATE TABLE IF NOT EXISTS tbl_iters (
     exact_error              REAL,
     creation_date           DATETIME NOT NULL,
     totalTime               REAL,
-    Qparams                 mediumblob,
-    userdata                mediumblob,
+    Qparams                 blob,
+    userdata                blob,
     iteration_idx           INTEGER NOT NULL,
     FOREIGN KEY (run_id) REFERENCES tbl_runs(run_id) ON DELETE CASCADE,
     CONSTRAINT idx_itr_idx UNIQUE (run_id, iteration_idx)
@@ -255,15 +255,15 @@ CREATE TABLE IF NOT EXISTS tbl_lvls (
     iter_id       INTEGER NOT NULL,
     lvl           text NOT NULL,
     lvl_hash      varchar(35) NOT NULL,
-    active        INT,
+    active        INTEGER,
     El            REAL,
     Vl            REAL,
     tT            REAL,
     tW            REAL,
     Ml            INTEGER,
     weight        REAL,
-    psums_delta   mediumblob,
-    psums_fine    mediumblob,
+    psums_delta   BLOB,
+    psums_fine    BLOB,
     FOREIGN KEY (iter_id) REFERENCES tbl_iters(iter_id) ON DELETE CASCADE,
     CONSTRAINT idx_run_lvl UNIQUE (iter_id, lvl_hash)
 );
@@ -350,9 +350,9 @@ class MIMCDatabase(object):
 INSERT INTO tbl_iters(creation_date, totalTime, TOL, bias, stat_error,
 exact_error, Qparams, userdata, iteration_idx, run_id)
 VALUES(datetime(), ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                        _nan2none([iteration.total_time, iteration.TOL,
-                                   iteration.bias, iteration.stat_error,
-                                   iteration.exact_error])
+                        _nan2none([float(iteration.total_time), float(iteration.TOL),
+                                   float(iteration.bias), float(iteration.stat_error),
+                                   float(iteration.exact_error)])
                         +[_pickle(iteration.Q), _pickle(iteration.userdata),
                           iteration_idx, run_id])
             iter_id = cur.getLastRowID()
@@ -360,7 +360,9 @@ VALUES(datetime(), ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             # Only add levels that are different from the
             #       previous iteration
             for k in range(0, iteration.lvls_count):
-                lvl_data = _nan2none([El[k], Vl[k], tT[k], tW[k], Ml[k]])
+                lvl_data = _nan2none([float(El[k]), float(Vl[k]),
+                                      float(tT[k]), float(tW[k]),
+                                      int(Ml[k])])
                 if prev_iter is not None:
                     if k < prev_iter.lvls_count:
                         if prev_iter.active_lvls[k] == iteration.active_lvls[k] and \
@@ -377,10 +379,12 @@ VALUES(datetime(), ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 cur.execute('''
 INSERT INTO tbl_lvls(active, lvl, lvl_hash, psums_delta, psums_fine, iter_id, weight,  El, Vl, tT, tW, Ml)
 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                            [iteration.active_lvls[k],
+                            [int(iteration.active_lvls[k]),
                              lvl, _md5(lvl),
                              _pickle(iteration.psums_delta[k, :]),
-                             _pickle(iteration.psums_fine[k, :]), iter_id, iteration.weights[k]] +
+                             _pickle(iteration.psums_fine[k, :]),
+                             int(iter_id),
+                             float(iteration.weights[k])] +
                             lvl_data)
 
     def readRunsByID(self, run_ids):
@@ -421,7 +425,6 @@ ORDER BY dr.run_id, dr.iteration_idx
             dictLvls[iter_id] = list(itr)
         for run_id, itr in itertools.groupby(iterAll, key=lambda x: x[0]):
             dictIters[run_id] = list(itr)
-
         for run_data in runAll:
             run = mimc.MIMCRun(**_unpickle(run_data[1]))
             run.db_data = mimc.Bunch()
@@ -460,7 +463,7 @@ ORDER BY dr.run_id, dr.iteration_idx
                 if iter_id not in dictLvls:
                     continue
                 for l in dictLvls[iter_id]:
-                    t = np.array(list(map(int, [p for p in re.split(",|\|", l[1]) if p])),
+                    t = np.array(list(map(int, [p for p in re.split(r"[,\|]", l[1]) if p])),
                                  dtype=setutil.ind_t)
                     k = iteration.lvls_find(ind=t[1::2], j=t[::2])
                     if k is None:

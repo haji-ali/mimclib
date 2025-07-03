@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pylab as plt
 from . import mimc
 from matplotlib.ticker import MaxNLocator
+from matplotlib import rcParams
 import os
 try:
     from matplotlib2tikz import save as tikz_save, DataFile
@@ -474,7 +475,7 @@ def computeIterationStats(runs, fnItrStats, arr_fnAgg, work_bins=None,
         xy_binned = xy[xy[:, 0].argsort(), :]
 
     if work_spacing is not None:
-        sel = np.zeros(xy_binned.shape[0], dtype=np.bool)
+        sel = np.zeros(xy_binned.shape[0], dtype=bool)
         prevWork = xy_binned[0, 0]
         sel[0] = True
         for i in range(1, xy_binned.shape[0]):
@@ -504,7 +505,8 @@ def plotDirections(ax, runs, fnPlot,
     markers = itertools.cycle(['o', 'v', '^', '<', '>', '8', 's', 'p',
                      '*', 'h', 'H', 'D', 'd'])
     linestyles = itertools.cycle(['--', '-.', '-', ':', '-'])
-    cycler = ax._get_lines.prop_cycler
+    # cycler = ax._get_lines.prop_cycler
+    cycler = iter(rcParams["axes.prop_cycle"])
     if beta is not None and hasattr(beta, '__iter__'):
         beta = beta[0]
 
@@ -604,6 +606,7 @@ def plotErrorsVsTOL(ax, runs, *args, **kwargs):
     xy = xy * modifier
 
     ax.set_xlabel(r'\tol')
+    ax.set_title("Error vs TOL")
     ax.set_ylabel('Relative error' if relative else 'Error')
     ax.set_yscale('log')
     ax.set_xscale('log')
@@ -729,6 +732,7 @@ def plotWorkVsMaxError(ax, runs, *args, **kwargs):
     fnAggError = kwargs.pop("fnAggError", np.max)
     flip = kwargs.pop('flip', False)
 
+    ax.set_title("Work vs error")
     if flip:
         ax.set_ylabel('Work')
         ax.set_xlabel('Max Relative Error' if relative else 'Max Error')
@@ -784,6 +788,7 @@ def plotWorkVsMaxError(ax, runs, *args, **kwargs):
 def plotAvgWorkVsTime(ax, runs, *args, **kwargs):
     work_bins = kwargs.pop('work_bins', 50)
     filteritr = kwargs.pop("filteritr", filteritr_all)
+    ax.set_title("Average work vs time")
     ax.set_xlabel('Avg. work')
     ax.set_ylabel('Running time')
     ax.set_yscale('log')
@@ -797,7 +802,7 @@ def plotAvgWorkVsTime(ax, runs, *args, **kwargs):
                                       work_bins=len(runs[0].iters),
                                       filteritr=filteritr,
                                       fnItrStats=fnItrStats,
-                                      arr_fnAgg=[np.mean, np.mean, np.max, np.min])
+                                      arr_fnAgg=[np.mean, np.mean, np.min, np.max])
     plotObj = []
     Ref_kwargs = kwargs.pop('Ref_kwargs', None)
     sel = np.nonzero(np.logical_and(np.isfinite(xy_binned[:, 1]), xy_binned[:, 1] >=
@@ -822,6 +827,7 @@ def plotTotalWorkVsLvls(ax, runs, *args, **kwargs):
     returned by MIMCDatabase.readRunData()
     ax is in instance of matplotlib.axes
     """
+    ax.set_title("Average total work vs level")
     ax.set_xlabel(r'$\ell$')
     ax.set_ylabel('Total Work')
     ax.set_yscale('log')
@@ -883,7 +889,7 @@ def _get_x_axis(ax, ret, kwargs):
     if x_axis == 'ell':
         ax.set_xlabel(r'$\ell$')
         x = np.arange(0, len(ret.central_delta_moments[:, 0]))
-    if x_axis == 'td':
+    elif x_axis == 'td':
         ax.set_xlabel(r'$\ell$')
         x = np.array([np.sum(i) for i in ret.inds])
     elif x_axis == 'log_ell':
@@ -1106,6 +1112,7 @@ def plotKurtosisVsLvls(ax, runs, *args, **kwargs):
     returned by MIMCDatabase.readRunData()
     ax is in instance of matplotlib.axes
     """
+    ax.set_title("Kurtosis vs level")
     ax.set_xlabel(r'$\ell$')
     ax.set_ylabel(r'$\textnormal{Kurt}_\ell$')
     ax.set_yscale('log')
@@ -1132,6 +1139,7 @@ def plotSkewnessVsLvls(ax, runs, *args, **kwargs):
     returned by MIMCDatabase.readRunData()
     ax is in instance of matplotlib.axes
     """
+    ax.set_title("Skewness vs level")
     ax.set_xlabel(r'$\ell$')
     ax.set_ylabel(r'$\textnormal{Skew}_\ell$')
     ax.set_yscale('log')
@@ -1154,6 +1162,7 @@ def plotSkewnessVsLvls(ax, runs, *args, **kwargs):
 
 @public
 def plotTimeVsLvls(ax, runs, *args, **kwargs):
+    ax.set_title("Time vs level")
     ax.set_xlabel(r'$\ell$')
     ax.set_ylabel('Time, [s]')
     ax.set_yscale('log')
@@ -1179,6 +1188,7 @@ def plotTimeVsLvls(ax, runs, *args, **kwargs):
 
 @public
 def plotWorkVsLvls(ax, runs, *args, **kwargs):
+    ax.set_title("Work vs level")
     ax.set_xlabel(r'$\ell$')
     ax.set_ylabel('Work')
     ax.set_yscale('log')
@@ -1223,6 +1233,8 @@ def plotTimeVsTOL(ax, runs, *args, **kwargs):
         tol2_scale = lambda TOL: 1.
         tol2_label = r""
 
+    ax.set_title("Time vs TOL")
+
     if fnTime == "work":
         ax.set_ylabel('Work estimate' + tol2_label)
         fnTime = lambda r, itr: np.sum(itr.tW * scalar(itr))
@@ -1236,7 +1248,7 @@ def plotTimeVsTOL(ax, runs, *args, **kwargs):
         assert MC_kwargs is None
         ax.set_ylabel('Wall clock time [s]' + tol2_label)
         fnMCWork = lambda r, itr: 0.
-        fnTime = lambda r, itr: r.iter_total_times[i]
+        fnTime = lambda r, itr: r.iter_total_times[r.iters.index(itr)]
     elif fnTime == 'time':
         ax.set_ylabel('Running time [s]' + tol2_label)
         fnTime = lambda r, itr: np.sum(itr.tT * scalar(itr))
@@ -1308,6 +1320,7 @@ def plotFirstLvlVsTOL(ax, runs, *args, **kwargs):
     scatter = kwargs.pop('scatter', True)
     ax.set_xlabel(r'\tol')
     ax.set_ylabel(r'$\ell_0$')
+    ax.set_title("First level vs TOL")
     ax.set_xscale('log')
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
@@ -1358,6 +1371,7 @@ def plotLvlsCountVsTOL(ax, runs, *args, **kwargs):
     ax.set_xscale('log')
     ax.set_xlabel(r'\tol')
     ax.set_ylabel(r'$L$')
+    ax.set_title("L vs TOL")
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
     filteritr = kwargs.pop("filteritr", filteritr_all)
@@ -1415,6 +1429,7 @@ def plotThetaVsTOL(ax, runs, *args, **kwargs):
     ax.set_xscale('log')
     ax.set_xlabel(r'\tol')
     ax.set_ylabel(r'$\theta$')
+    ax.set_title("Theta vs TOL")
     ax.set_ylim([0, 1.])
 
     filteritr = kwargs.pop("filteritr", filteritr_all)
@@ -1463,6 +1478,7 @@ def plotErrorsPP(ax, runs, label_fmt='${TOL}$', *args, **kwargs):
     # not the finalTOL of MLMC (might be different sometimes)
     ax.set_xlabel(r'Empirical CDF')
     ax.set_ylabel("Normal CDF")
+    ax.set_title("PP plot")
     ax.set_xlim([0, 1.])
     ax.set_ylim([0, 1.])
 
@@ -1488,7 +1504,9 @@ def plotErrorsPP(ax, runs, label_fmt='${TOL}$', *args, **kwargs):
         warnings.warn("PP plots require the object to implement __float__")
         return
 
+    if np.std(x) > 0:
     x /= np.std(x)
+
     ec = ECDF(x)
     plotObj = []
     Ref_kwargs = kwargs.pop('Ref_kwargs', None)
@@ -1516,13 +1534,13 @@ def add_legend(ax, handles=None, labels=None, alpha=0.5, outside=None,
         if not handles:
             return None
 
-    lines = np.array([type(h) is FunctionLine2D for h in handles], dtype=np.bool)
+    lines = np.array([type(h) is FunctionLine2D for h in handles], dtype=bool)
 
     # Order handles so that FunctionLine2D is always at the end
     if np.any(lines) and not np.all(lines):
         nlines = np.logical_not(lines)
-        handles = np.array(handles)
-        labels = np.array(labels)
+        handles = np.array(handles, dtype=object)
+        labels = np.array(labels, dtype=object)
         if sort:
             handles_lines, labels_lines = zip(*sorted(zip(handles[lines].tolist(), labels[lines].tolist()),
                                                       key=lambda t: t[1]))
@@ -1598,7 +1616,7 @@ def plot_except(ax, verbose=True, reraise=True):
 @public
 def genBooklet(runs, filteritr=None, input_args=dict(),
                modifier=1., fnNorm=None):
-    if len(runs) == 1:
+    if len(runs) != 1:
         raise Exception("Only one tag is supported")
     runs = runs[0]
     if len(runs) == 0:
@@ -1606,13 +1624,13 @@ def genBooklet(runs, filteritr=None, input_args=dict(),
 
     filteritr = filteritr if filteritr is not None else filteritr_all
     reraise = False
-    label_fmt = input_args.pop("label_fmt", None)
-    call_add_legend = input_args.pop("add_legend", True)
+    label_fmt = input_args.get("label_fmt", None)
+    call_add_legend = input_args.get("add_legend", True)
     TOLs_count = len(np.unique([itr.TOL for _, itr in enum_iter(runs, filteritr)]))
     convergent_count = len([itr.TOL for _, itr in enum_iter(runs, filteritr_convergent)])
     iters_count = np.sum([len(r.iters) for r in runs])
-    verbose = input_args.pop('verbose', False)
-    legend_outside = input_args.pop("legend_outside", 5)
+    verbose = input_args.get('verbose', False)
+    legend_outside = input_args.get("legend_outside", 5)
     if verbose:
         def print_msg(*args):
             print(*args)
@@ -1738,7 +1756,7 @@ def genBooklet(runs, filteritr=None, input_args=dict(),
         try:
             _, _ = plotTimeVsTOL(ax_time, runs, fmt='-.',
                                  label=label_fmt.format(label="Wall clock"),
-                                 filteritr=filteritr, fnTime="real_time",
+                                 filteritr=filteritr, fnTime="real-time",
                                  MC_kwargs=None)
         except:
             plot_except(ax_time, verbose, reraise)
@@ -1806,16 +1824,16 @@ def genBooklet(runs, filteritr=None, input_args=dict(),
             plot_except(ax, verbose, reraise)
 
     if TOLs_count > 1:
-        print_msg("plotLvlsNumVsTOL")
+        print_msg("plotLvlsCountVsTOL")
         ax = add_fig()
         try:
-            line_data, _ = plotLvlsNumVsTOL(ax, runs, filteritr=filteritr)
+            line_data, _ = plotLvlsCountVsTOL(ax, runs, filteritr=filteritr)
             if has_beta and has_w_rate and has_gamma_rate:
                 if has_beta:
                     rate = 1./np.min(np.array(params.w) * np.log(params.beta))
                 else:
                     rate = 1./np.min(np.array(params.w))
-                label = r'${}\log\left({\tol}^{{-1}}\right)$'.format(_formatPower(rate))
+                label = r'${}\log\left({{\tol}}^{{-1}}\right)$'.format(_formatPower(rate))
                 ax.add_line(FunctionLine2D(fn=lambda x, r=rate: -rate*np.log(x),
                                            data=line_data,
                                            log_data=False,
