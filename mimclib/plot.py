@@ -1505,7 +1505,7 @@ def plotErrorsPP(ax, runs, label_fmt='${TOL}$', *args, **kwargs):
         return
 
     if np.std(x) > 0:
-    x /= np.std(x)
+        x /= np.std(x)
 
     ec = ECDF(x)
     plotObj = []
