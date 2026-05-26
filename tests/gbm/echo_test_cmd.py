@@ -34,7 +34,7 @@ if __name__ == "__main__":
         print(cmd_single.format(seed=0, TOL=0.001, tag=args.db_tag))
     else:
         cmd_multi = "./ " + base + \
-                    " -mimc_verbose 0 -db -db_tag {tag} -db_engine sqlite -db_name mimc.sqlite "
+                    " -mimc_verbose 0 -db -db_tag {tag} -db_engine sqlite -db_name mimc.sqlitep "
         #TOLs = 0.05*np.sqrt(2.)**-np.arange(0., 21.)
         TOL = 1e-7
         for i in range(0, args.tries):

@@ -406,7 +406,7 @@ class MIMCItrData(object):
     @property
     def active_lvls_count(self):
         return np.sum(self.active_lvls>=0)
-    
+
     @property
     def total_error_est(self):
         stat_err = self.stat_error if not np.isnan(self.stat_error) else 0
@@ -650,7 +650,7 @@ class MIMCRun(object):
                     d = self.params.min_dim
                 weights = np.ones(d) / d
             else:
-                raise ValueError("No default ExtendLvls for ")
+                raise ValueError("No default ExtendLvls")
 
             profCalc = setutil.TDFTProfCalculator(weights)
             self.fn.ExtendLvls = lambda s=self: extend_prof_lvls(s,
@@ -709,7 +709,7 @@ class MIMCRun(object):
                 kwargs["help"] += " (default: {})".format(kwargs["default"])
             mimcgrp.add_argument(pre + name, dest=dest, action=action, **kwargs)
 
-            
+
         def add_dict_arg(name, dict_arg, dest=None, **kwargs):
             dest = name if dest is None else dest
             class customAction(argparse.Action):
@@ -1025,7 +1025,7 @@ max_lvl        = {}
         #                       constant_values=newTodoM[-1])
         # return np.concatenate((self.last_itr.M[:prev], newTodoM[prev:self.last_itr.lvls_count]))
 
-         
+
     def _genSamples_zp(self, totalM):
         totalM = totalM.copy()
         done = np.zeros(len(totalM), dtype=int)
@@ -1138,7 +1138,7 @@ max_lvl        = {}
             if to_change:
                 # Increase minimum level one at a time.
                 new_start_lvl = self.cur_start_level+1
-                
+
                 # Assuming that we already have some samples in both levels, and the work
                 # already spent in level 0 will be discarded, this should be taken into account
                 # This should also depend on the tolerance that we are interested in.
@@ -1164,7 +1164,7 @@ max_lvl        = {}
                     new_work1 = np.maximum(newM[new_start_lvl] -
                                            self.last_itr.M[new_start_lvl], 0) * \
                                            deltaWl[new_start_lvl]
-                    
+
                     reuse = old_work < new_work1
                     self.print_debug("New work:", new_work1, "vs. old work:", (add_work0 + add_work1))
 
@@ -1287,7 +1287,7 @@ max_lvl        = {}
                             self.last_itr.zero_samples()
                         samples_added = np.any(self._genSamples_zp(newTodoM)>0) or samples_added
 
-                
+
                 self._check_levels()
                 self.Q.theta = self._calcTheta(TOL, self.bias)
 
@@ -1305,7 +1305,7 @@ max_lvl        = {}
 
                 if not self.params.reuse_samples:
                     self.last_itr.zero_samples()
-                    
+
                 samples_added = np.any(self._genSamples_zp(todoM)>0) or samples_added
                 self.output(verbose=self.params.verbose)
                 self.print_info("------------------------------------------------")
@@ -1321,7 +1321,7 @@ max_lvl        = {}
                     add_new_level = False
                     break
                 add_new_level = self.bias > self.bias_target(TOL)
-                
+
             self.print_info("MIMC iteration for TOL={} took {} seconds".format(TOL, self.last_itr.total_time))
             self.print_info("################################################")
             if less(TOL, finalTOL) and self.total_error_est <= finalTOL:
@@ -1589,7 +1589,7 @@ def default_sample_all_sums(lvls, M, moments, fnSampleSums,
                 psums_delta[i] += cur_fsums
             else:
                 psums_delta[i] += cur_diffsums
-            calcM[i] += cur_M 
+            calcM[i] += cur_M
     return calcM, psums_delta, psums_fine, total_time, total_work
 
 

@@ -282,7 +282,7 @@ vw_iters.run_id=vw_runs.run_id GROUP BY vw_runs.run_id, tag;
 
 @public
 class MIMCDatabase(object):
-    def __init__(self, engine='mysql', **kwargs):
+    def __init__(self, engine='sqlite', **kwargs):
         self.DBName = kwargs.pop("db", 'mimc')
         kwargs["db"] = self.DBName
         self.engine = engine
@@ -536,7 +536,7 @@ ORDER BY dr.run_id, dr.iteration_idx
             return list(filter(lambda r: len(r.iters) > 0, runs))
         return runs
 
-    def update_exact_errors(self, runs):        
+    def update_exact_errors(self, runs):
         with self.connect() as cur:
             for run in runs:
                 for itr in run.iters:
