@@ -193,10 +193,10 @@ double RunKuramoto_QoI(unsigned int dim,
     for (unsigned int d=0;d<dim;d++)
     {
         double real=0;
-        double imag=0;
+        //double imag=0;
         for (unsigned int j=0;j<P;j++){
             real += cos(theta[d][j]);
-            imag += sin(theta[d][j]);
+            //  imag += sin(theta[d][j]);
         }
         qoi += real/P;
         //qoi += pow2(real/P) + pow2(imag/P);
